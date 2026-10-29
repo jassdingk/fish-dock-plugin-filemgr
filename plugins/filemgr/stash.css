@@ -1,0 +1,54 @@
+/* 文件暂存页样式。沿用 dock.css 的设计变量，深色/浅色主题均适用。 */
+
+/* 分组条 */
+#groupbar{padding:12px 14px 10px}
+#groups{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+#groups .g{min-height:26px;padding:2px 12px;border:1px solid var(--dock-line);border-radius:999px;background:var(--dock-bg);color:var(--dock-muted);font-size:12px;font-weight:600;cursor:pointer}
+#groups .g:hover{filter:brightness(1.15)}
+#groups .g[aria-pressed=true]{background:var(--dock-accent);border-color:var(--dock-accent);color:#04122b}
+#groups .g .cnt{opacity:.7;font-weight:400;margin-left:4px}
+.group-ops,.tag-ops{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.group-ops{margin:0 0 10px}
+button.ghost{background:transparent;border-style:dashed;opacity:.85}
+.move-label{display:flex;align-items:center;gap:6px;margin:0;color:var(--dock-muted);font-size:12px}
+#move-to{width:auto;min-width:120px;min-height:26px;padding:2px 8px;font-size:12px}
+.tag-filter{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.tag-filter:empty{margin:0}
+.chip{display:inline-flex;align-items:center;gap:4px;min-height:22px;padding:1px 10px;border:1px solid var(--dock-line);border-radius:999px;background:var(--dock-control);color:var(--dock-text);font-size:11.5px;cursor:pointer}
+.chip:hover{filter:brightness(1.15)}
+.chip[aria-pressed=true]{background:var(--dock-accent);border-color:var(--dock-accent);color:#04122b}
+.chip .x{opacity:.6}
+.tag-ops{margin:0}
+.tag-ops input{flex:1;min-width:140px;max-width:240px;min-height:26px;padding:2px 10px;font-size:12px}
+
+/* 暂存区主体 */
+#stash{position:relative;padding:0;overflow:visible}
+#stash.drag-over{outline:2px dashed var(--dock-accent);outline-offset:-2px}
+#list{min-height:120px}
+.row{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--dock-line);cursor:default;user-select:none}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--dock-control)}
+/* 选中态：淡 accent 底 + 左侧竖线，正文保持原色 —— 整片蓝底加深蓝字会把
+   分组徽标、备注这些灰色小字吞掉（可读优先）。 */
+.row.selected{background:color-mix(in srgb,var(--dock-accent) 14%,transparent);color:var(--dock-text);
+  box-shadow:inset 2px 0 0 var(--dock-accent)}
+.row.selected .nm{color:var(--dock-text);font-weight:700}
+.row.selected .grp,.row.selected .note,.row.selected .chip{color:var(--dock-text);border-color:color-mix(in srgb,var(--dock-accent) 55%,transparent)}
+.row.selected .chip{background:color-mix(in srgb,var(--dock-accent) 22%,transparent)}
+.row.missing{opacity:.55}
+.row .ico{width:22px;text-align:center;flex:none;font-size:14px}
+.row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.row .grp{flex:none;font-size:11px;color:var(--dock-muted);border:1px solid var(--dock-line);border-radius:999px;padding:0 8px;line-height:18px}
+.row .tags{display:flex;flex-wrap:wrap;gap:4px;flex:none;max-width:40%}
+.row .chip{min-height:18px;padding:0 8px;font-size:10.5px;cursor:default}
+.row .note{flex:none;font-size:11px;margin:0}
+.row .miss{flex:none;font-size:11px;color:#ff9f0a;margin:0}
+
+/* 拖入浮层 */
+#drop-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--dock-accent) 18%,transparent);border-radius:18px;z-index:5;pointer-events:none}
+#drop-overlay span{padding:8px 20px;border-radius:999px;background:var(--dock-accent);color:#04122b;font-weight:700;box-shadow:0 4px 16px #0006}
+
+/* 空状态 */
+.empty{text-align:center;padding:36px 12px}
+.empty-icon{font-size:30px;margin:0 0 6px}
+.empty p{margin:4px 0}

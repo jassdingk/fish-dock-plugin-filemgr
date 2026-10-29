@@ -1,0 +1,242 @@
+/* 文件管理页：外层三栏（暂存 | 分隔条 | 预览），内层复用 page.css 的文件夹/预览双栏。
+   两条硬规矩沿用 page.css：高度用固定 px 不写 vh；main 总高钉死，避免上报高度抖动。 */
+body[data-layout=double]{height:820px}
+body.fm-layout, main.fm{height:820px;display:flex;flex-direction:column;padding:0}
+
+.fm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 8px 8px;flex:none;flex-wrap:wrap}
+.fm-head .identity{display:flex;align-items:baseline;gap:10px;min-width:0}
+.fm-head #state{color:var(--dock-muted);font-size:12px}
+.fm-head #state:empty{display:none}
+/* 标题右侧的文件元信息：名 · 类型 · 大小 · 修改时间 */
+.fm-head .fm-meta{color:var(--dock-muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:52vw}
+.fm-head .fm-meta:empty{display:none}
+
+/* 错误条跨全宽 */
+main.fm > #error{margin:0 8px 8px;flex:none}
+
+/* 外层三列：暂存栏 | 分隔条 | 预览区。暂存栏宽度由 --stash-w 控制。 */
+.fm-body{
+  flex:1 1 auto;min-height:0;
+  display:grid;
+  grid-template-columns:min(var(--stash-w,300px),50%) 8px minmax(0,1fr);
+  gap:5px;align-items:stretch;
+  padding:0 8px 8px;
+}
+
+/* 外层分隔条：整条 8px 命中，中间画 2px 竖线 */
+#fmsplit{position:relative;cursor:col-resize;touch-action:none;align-self:stretch;border-radius:6px}
+#fmsplit::before{content:'';position:absolute;top:8px;bottom:8px;left:50%;width:2px;margin-left:-1px;border-radius:2px;background:var(--dock-line);transition:background .12s}
+#fmsplit:hover::before,#fmsplit:focus-visible::before,#fmsplit[data-dragging=true]::before{background:var(--dock-accent)}
+#fmsplit:focus-visible{outline:none}
+#fmsplit[data-dragging=true]{background:var(--dock-control)}
+body[data-resizing=true]{user-select:none;cursor:col-resize}
+
+/* ---- 左：暂存栏 ---- */
+#stash-col{
+  margin:0;padding:12px;min-width:0;min-height:0;overflow:hidden;
+  display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:8px;
+  border:1px solid var(--dock-line);border-radius:18px;background:var(--dock-card);
+}
+.fm-col-title{margin:0;font-size:13.5px;font-weight:600}
+#stash-col .stash-toolbar{gap:6px;margin:0}
+#stash-col .stash-toolbar button{min-height:26px;padding:2px 10px;font-size:12px}
+/* 分组操作条：现在是暂存区内部的一行，不再单独占 grid 行 */
+#stash-col #groupbar{padding:0;margin:0;background:transparent;border:0;min-height:0}
+#stash-col #groupbar .group-ops{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0}
+#stash-col #groupbar button{min-height:24px;padding:1px 9px;font-size:11.5px}
+/* 内联新建分组输入框（不依赖 window.prompt，WebView2 里 prompt 可能被禁用） */
+#stash-col #groupbar .group-new-input{min-height:24px;padding:1px 8px;font-size:11.5px;min-width:110px;
+  background:var(--dock-input,#12161d);color:inherit;border:1px solid var(--dock-accent,#3b82f6);border-radius:6px;outline:none}
+
+/* 可折叠分组：每个分组是一个 <details>，组头是标签样式（参考 cost-meter 的「今日」折叠） */
+#list{padding:2px 6px}
+.stash-group{margin:4px 0;border-radius:10px}
+.stash-group>.stash-tag{
+  display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer;
+  padding:5px 10px;border-radius:999px;border:1px solid var(--dock-line);
+  background:var(--dock-bg);color:var(--dock-muted);font-size:12px;font-weight:600;
+  user-select:none;
+}
+.stash-group>.stash-tag::-webkit-details-marker{display:none}
+.stash-group>.stash-tag::before{content:'›';flex:none;width:1em;text-align:center;opacity:.75;transition:transform .12s}
+.stash-group[open]>.stash-tag::before{content:'⌄'}
+.stash-group>.stash-tag:hover{filter:brightness(1.15)}
+.stash-tag-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--dock-accent)}
+.stash-tag-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stash-tag-count{opacity:.65;font-weight:400}
+.stash-tag-del{margin-left:auto;flex:none;opacity:.55;padding:0 4px;font-size:13px;line-height:1;cursor:pointer}
+/* 当前正在筛选的标签（state.view 指向的组）高亮 */
+.stash-group>.stash-tag.active{color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent)}
+.stash-group>.stash-tag.active>.stash-tag-dot{background:#1a1035}
+.stash-group>.stash-tag.active>.stash-tag-count{opacity:.8}
+.stash-group>.stash-tag.active>.stash-tag-del{color:#1a1035;opacity:.75}
+.stash-group>.stash-tag.active>.stash-tag-del:hover{color:#7a1010}
+/* 右侧文件列表：已在暂存/分组里的文件 */
+.filelist .row.stashed .nm{color:var(--dock-accent)}
+.stash-badge{flex:none;font-size:10px;line-height:1;padding:2px 6px;border-radius:999px;
+  background:color-mix(in srgb,var(--dock-accent) 22%,transparent);color:var(--dock-accent);
+  border:1px solid color-mix(in srgb,var(--dock-accent) 45%,transparent);white-space:nowrap;max-width:9em;overflow:hidden;text-overflow:ellipsis}
+.stash-tag-del:hover{opacity:1;color:#ff5f57}
+/* 标签内「只看本组 / 看全部」按钮：文字标签，带边框，保证一眼能读懂 */
+.stash-tag-filter{flex:none;padding:1px 8px;font-size:11px;line-height:1.5;cursor:pointer;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--dock-line) 90%,transparent);color:var(--dock-muted);background:transparent}
+.stash-tag-filter:hover{color:var(--dock-text);border-color:var(--dock-accent)}
+.stash-tag-filter.on{color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent);font-weight:700}
+.stash-group-empty{margin:6px 8px 10px;color:var(--dock-muted);font-size:11.5px}
+#stash-col #stash{padding:8px;margin:0;overflow:hidden;min-height:0;border:1px solid var(--dock-line);border-radius:12px;background:var(--dock-bg);display:flex;flex-direction:column;gap:6px;position:relative}
+#stash-col #stash>#list{flex:1 1 auto;min-height:0;overflow:auto;padding:0}
+#stash-col #list{min-height:120px}
+#stash-col #foot{margin:0;font-size:11.5px}
+#stash-col #foot:empty{display:none}
+
+/* ---- 右：预览区（内含 page.css 的 .workspace 双栏） ---- */
+#preview-col{
+  min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px;
+  padding:12px;border:1px solid var(--dock-line);border-radius:18px;background:var(--dock-card);
+  overflow:hidden;
+}
+#preview-col .preview-toolbar{gap:8px;margin:0;flex:none;position:relative}
+#preview-col #jump{margin:0;flex:none}
+/* 内层 workspace 填满余下高度；page.css 已定义三列（side|split|stage）。 */
+#preview-col .workspace{flex:1 1 auto;min-height:0;align-items:stretch}
+
+/* 内层 stage / side 在合并页里要撑满，不再固定 820 */
+#preview-col #stage{padding:10px 12px 14px}
+#preview-col #view{overflow:auto}
+
+/* 窄屏：暂存栏收窄 */
+@media(max-width:900px){
+  .fm-body{grid-template-columns:min(var(--stash-w,300px),46%) 8px minmax(0,1fr);gap:4px}
+  #stash-col{padding:8px}
+  #preview-col{padding:8px}
+}
+@media(max-width:640px){
+  .fm-body{grid-template-columns:min(var(--stash-w,300px),40%) 8px minmax(0,1fr);gap:3px}
+}
+
+/* ---- 互关联①:文件列表项(左栏目录树/单栏目录)的「＋暂存」按钮 ---- */
+/* 行内既有 sz/dt，再加一列放按钮；按钮默认隐藏，悬停行时浮现，避免视觉噪音。 */
+/* 列顺序：add(20) ni(26图标) nm(主) st(类型) sz(大小) dt(时间)。
+   六列全部固定宽度（nm 除外），保证每一行对齐；badge 不再作为 grid item，
+   而是塞进 .nm 内部，否则"已暂存"行会多占一列把 size/time 顶偏。 */
+.filelist .row{grid-template-columns:20px 26px minmax(0,1fr) 58px 62px 96px}
+
+/* ---- 文件夹列表：工具条 + 表头（列宽与 .row 的 6 列严格对齐）---- */
+/* #browse 原来是 3 行 grid（crumbs|list|foot），这里多插了 tools 与 head 两个子元素，
+   必须把行模板同步扩到 5 行，否则 list/foot 会被挤进自动行导致整个左栏塌陷。 */
+#browse{grid-template-rows:auto auto auto minmax(0,1fr) auto}
+.browse-tools{display:flex;justify-content:flex-end;gap:6px;margin:0;flex:none}
+.browse-tools .tiny{font:600 11px/1 inherit;font-family:inherit;padding:2px 9px;border-radius:999px;
+  border:1px solid var(--dock-line);background:transparent;color:var(--dock-muted);cursor:pointer;opacity:.75}
+.browse-tools .tiny:hover{opacity:1;color:var(--dock-fg)}
+.browse-tools .tiny.on{background:color-mix(in srgb,var(--dock-accent) 16%,transparent);
+  border-color:var(--dock-accent);color:var(--dock-fg);opacity:1}
+.browse-head{display:grid;grid-template-columns:20px 26px minmax(0,1fr) 58px 62px 96px;gap:0 6px;
+  align-items:center;padding:3px 8px 2px;margin:0 0 1px;flex:none;font-size:11px;color:var(--dock-muted);
+  border-bottom:1px solid var(--dock-line)}
+.browse-head[hidden]{display:none}
+.browse-head button{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;
+  cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.browse-head button:hover{color:var(--dock-fg)}
+.browse-head button.on{color:var(--dock-fg);font-weight:600}
+.browse-head button.on[data-dir=asc]::after{content:' ▲';font-size:9px;opacity:.8}
+.browse-head button.on[data-dir=desc]::after{content:' ▼';font-size:9px;opacity:.8}
+.browse-head button:nth-child(3){text-align:left}
+.browse-head button:nth-child(6){text-align:right}
+
+.filelist .row .nm{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
+.filelist .row .nm .nmt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filelist .row .nm .stash-badge{flex:none}
+.filelist .row .st{color:var(--dock-muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filelist .row .sz{text-align:right}
+.filelist .row .dt{max-width:9.5em;overflow:hidden;text-overflow:ellipsis}
+.row .add{
+  display:flex;align-items:center;justify-content:center;
+  width:20px;height:20px;padding:0;border:0;border-radius:4px;
+  font-size:14px;line-height:1;color:var(--dock-muted);cursor:pointer;
+  background:transparent;transition:color .12s,background .12s;
+  opacity:.38;
+}
+/* 图标列：目录 📁 / 文件 📄。空着会让 "+" 和文件名之间出现一大块空白。 */
+.filelist .row .ni{display:flex;align-items:center;justify-content:center;width:26px;height:26px;font-size:12px;line-height:1}
+.filelist .row .ni::before{content:'📄'}
+.filelist .row.dir .ni::before{content:'📁'}
+.filelist .row:hover .add,.filelist .row:focus-within .add{opacity:1}
+.row .add:hover,.row .add:focus-visible{color:var(--dock-accent);outline:none}
+
+/* ---- 互关联②:暂存列表项的「预览」按钮 ---- */
+.stash-preview-btn{
+  flex:none;font:600 11px/1 inherit;font-family:inherit;padding:3px 9px;border:1px solid var(--dock-line);
+  border-radius:999px;color:var(--dock-muted);cursor:pointer;white-space:nowrap;
+  opacity:0;transition:opacity .12s,background .12s,color .12s;
+}
+#list .row:hover .stash-preview-btn,#list .row:focus-within .stash-preview-btn{opacity:1}
+#list .row.selected .stash-preview-btn{color:var(--dock-accent);border-color:color-mix(in srgb,var(--dock-accent) 55%,transparent);opacity:1}
+.stash-preview-btn:hover,.stash-preview-btn:focus-visible{background:var(--dock-accent);border-color:var(--dock-accent);color:#1a1035;outline:none}
+
+/* ---- 常用文件夹 ---- */
+#fav-open{font-size:14px;min-width:26px;padding:0}
+.fav-pop{
+  position:absolute;top:100%;right:0;z-index:100;
+  min-width:260px;max-width:360px;max-height:360px;overflow-y:auto;
+  background:var(--dock-card);border:1px solid var(--dock-line);
+  border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+  padding:6px;margin-top:4px;
+}
+.fav-section:not(:last-child){border-bottom:1px solid var(--dock-line);margin-bottom:4px;padding-bottom:4px}
+.fav-label{font-size:10.5px;color:var(--dock-muted);text-transform:uppercase;letter-spacing:.5px;padding:4px 8px 2px}
+.fav-item{
+  display:flex;align-items:center;gap:6px;
+  width:100%;min-height:30px;padding:4px 8px;
+  border:0;border-radius:8px;background:transparent;
+  font-size:12px;text-align:left;cursor:pointer;
+  color:var(--dock-text);overflow:hidden;
+}
+.fav-item:hover{background:var(--dock-control)}
+.fav-item .fav-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav-item .fav-pin{flex:none;font-size:11px;color:var(--dock-accent);opacity:.7}
+.fav-item .fav-del{flex:none;font-size:14px;color:var(--dock-muted);opacity:0;padding:0 2px;line-height:1}
+.fav-item:hover .fav-del{opacity:.7}
+.fav-item .fav-del:hover{opacity:1;color:var(--dock-accent)}
+
+/* ---- 文件夹列表：框选（rubber band）+ 多选 + 拖到暂存区 ---- */
+/* 行是 button，但拖动时仍可能触发文本选择，直接禁用更省事。 */
+.filelist .row{user-select:none;-webkit-user-select:none}
+/* 列表容器必须是定位祖先，选框才能以它左上角为原点算坐标。 */
+#browse-list{position:relative}
+
+/* 框选矩形：用 fixed 定位，跟着指针在视口里的坐标走，不受滚动影响。 */
+#rubber{
+  position:fixed;z-index:60;pointer-events:none;display:none;
+  border:1px solid var(--dock-accent);border-radius:3px;
+  background:color-mix(in srgb,var(--dock-accent) 18%,transparent);
+}
+#rubber.on{display:block}
+
+/* 多选行：左侧加一道强调色竖条，底色轻微提亮，和「当前预览」的 .active 区分开。 */
+.filelist .row.sel{
+  background:color-mix(in srgb,var(--dock-accent) 16%,transparent);
+  box-shadow:inset 3px 0 0 var(--dock-accent);
+}
+.filelist .row.sel .nm{color:var(--dock-text)}
+
+/* 拖动中：禁止选中文本，光标改成抓取手势 */
+body[data-boxing=true]{user-select:none;cursor:crosshair}
+body[data-dragging=true]{user-select:none;cursor:grabbing}
+/* 正在被拖去暂存区的行淡一点，给出"正在搬走"的反馈 */
+.filelist .row.drag-src{opacity:.45}
+
+/* 暂存区在拖动悬停时高亮，明确告诉用户"松手就进来" */
+#stash-col.drop-target #stash{
+  border-color:var(--dock-accent);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--dock-accent) 35%,transparent);
+}
+
+/* 拖动时跟随指针的小胶囊标签 */
+.drag-ghost{
+  position:fixed;z-index:70;pointer-events:none;
+  padding:3px 9px;border-radius:999px;font-size:12px;line-height:1.5;
+  background:var(--dock-accent);color:#1a1035;font-weight:600;
+  box-shadow:0 6px 18px rgba(0,0,0,.45);
+}
+

@@ -1,0 +1,208 @@
+/* 文件预览页：沿用 dock.css 的灰阶与胶囊控件，只补布局与预览区样式。 */
+#app-main, main{min-width:0}
+header{flex-wrap:wrap}
+header nav{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.layouts{border-radius:999px;background:var(--dock-card);padding:3px;gap:2px}
+.layouts button{border:0;background:transparent;min-height:24px;padding:2px 12px}
+.layouts button[aria-pressed=true]{background:var(--dock-line);color:var(--dock-text)}
+
+.workspace{display:grid;gap:12px;align-items:start;grid-template-columns:minmax(0,1fr)}
+/* 双栏：左文件夹 / 右预览。
+   两条硬规矩，都是为了不打自己的脸：
+   1) 高度用固定 px，绝不写 vh。宿主是拿我们上报的 main 高度去设 iframe 高度的，
+      再用 vh 就是「高度依赖视口、视口依赖上报高度」的死循环，面板会一直抖。
+   2) main 的总高也钉死（见下方 body[data-layout=double] main），窄屏 header 换行时
+      由 workspace 让位，总高恒定 —— 上报值稳定，宿主只量一次。 */
+body[data-layout=double] main{display:flex;flex-direction:column;height:820px}
+/* 三行：上栏（文件夹） | 分隔条 | 下栏（预览）。上栏高度由 --side-h 控制，拖动分隔条就是改这个变量。 */
+body[data-layout=double] .workspace{
+  flex:1 1 auto;
+  min-height:0;
+  grid-template-rows:min(var(--side-h,280px),55%) 8px minmax(0,1fr);
+  grid-template-columns:minmax(0,1fr);
+  gap:5px;
+  align-items:stretch;
+}
+
+/* 分栏分隔条：整条 8px 都是拖动命中区，中间画 2px 横线。单栏时整条隐藏。 */
+#split{display:none;position:relative;cursor:row-resize;touch-action:none;align-self:stretch;border-radius:6px}
+body[data-layout=double] #split{display:block}
+#split::before{content:'';position:absolute;left:8px;right:8px;top:50%;height:2px;margin-top:-1px;border-radius:2px;background:var(--dock-line);transition:background .12s}
+#split:hover::before,#split:focus-visible::before,#split[data-dragging=true]::before{background:var(--dock-accent)}
+#split:focus-visible{outline:none}
+#split[data-dragging=true]{background:var(--dock-control)}
+/* 拖动期间锁住文字选中，否则会拖出一片蓝色选区。 */
+body[data-resizing=true]{user-select:none;cursor:row-resize}
+body[data-layout=single] #side{display:none}
+body[data-layout=single] #browse{display:none}
+
+#side{margin:0;padding:12px;display:grid;gap:10px;grid-template-rows:minmax(0,1fr) auto;min-height:0;overflow:hidden;border:1px solid var(--dock-line);border-radius:18px;background:var(--dock-card)}
+/* 上下并列后 #side 只有上栏那点高度（默认 360px），「位置/最近」面板在里面会
+   把文件夹列表挤成几十像素（实测 filelist 只剩 4 行）。用户也明确要求过移除
+   显示位置功能，所以双栏时整块 #loc 不出现，把高度全留给列表。 */
+body[data-layout=double] #side{grid-template-rows:minmax(0,1fr);gap:0}
+
+/* 左栏：文件夹浏览器，独立滚动，撑满可用高度 */
+#browse{display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:8px;min-height:0;min-width:0;margin:0}
+#browse-crumbs{margin:0}
+#browse-list{overflow:auto;min-height:0;align-content:start;padding-right:2px}
+#browse .filelist{margin:0}
+.browse-foot{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--dock-line);padding-top:6px}
+
+/* 位置/最近：双栏时折叠到左栏底部，单栏时不出现在左栏 */
+#loc{display:grid;gap:4px;min-width:0;max-height:340px;overflow:auto;border-top:1px solid var(--dock-line);padding-top:8px}
+body[data-layout=double] #loc{display:none}
+
+#side h2{font-size:11.5px;color:var(--dock-muted);text-transform:none;letter-spacing:0;margin:2px 0 4px}
+#roots,#recent{display:grid;gap:2px}
+#roots button,#recent button{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-color:transparent;background:transparent;font-weight:500;min-height:26px;padding:3px 10px}
+#roots button:hover,#recent button:hover{background:var(--dock-control)}
+#roots button[aria-current=true],#recent button[aria-current=true]{background:var(--dock-line);border-color:var(--dock-line)}
+button.ghost{background:transparent;border-color:transparent;color:var(--dock-muted);font-weight:500;min-height:24px;padding:2px 10px}
+#path-line{font-size:11.5px;overflow-wrap:anywhere;margin:10px 0 0;max-height:88px;overflow:auto}
+
+#stage{margin:0;padding:12px 14px 18px;min-width:0;min-height:0;overflow:auto}
+body[data-layout=double] #stage{border:1px solid var(--dock-line);border-radius:18px;background:var(--dock-card)}
+body[data-layout=double] #view{height:100%;min-height:0}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 10px;font-size:12px}
+.crumbs button{background:transparent;border-color:transparent;min-height:22px;padding:1px 8px;font-weight:500;color:var(--dock-muted)}
+.crumbs button:hover{color:var(--dock-text);background:var(--dock-control)}
+.crumbs button:last-of-type{color:var(--dock-text)}
+.crumbs span{color:var(--dock-muted)}
+
+#view{min-width:0}
+#view>header{display:none}
+
+.filelist{display:grid;gap:2px;margin:0}
+.filelist .row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:5px 9px;font-weight:500;min-height:28px}
+.filelist .row:hover{background:var(--dock-control)}
+.filelist .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.filelist .row .nm::before{content:'';display:inline-block;width:14px;text-align:center;margin-right:6px;color:var(--dock-muted)}
+.filelist .row.dir .nm::before{content:'▸';color:var(--dock-accent)}
+.filelist .row .sz,.filelist .row .dt{color:var(--dock-muted);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.filelist .empty{color:var(--dock-muted);padding:10px 4px}
+
+.preview-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.preview-head h2{font-size:13.5px;margin:0;overflow-wrap:anywhere}
+.preview-head .badge{font-size:11px;color:var(--dock-muted);border:1px solid var(--dock-line);border-radius:999px;padding:1px 9px}
+
+pre.body{white-space:pre;overflow:auto;max-height:720px;margin:0;padding:10px 12px;border-radius:12px;background:#0b0b0c;border:1px solid var(--dock-line);font:12px/1.62 'Cascadia Mono',Consolas,'Courier New',monospace;tab-size:2}
+:root[data-dock-theme=light] pre.body{background:#f6f6f7}
+pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right;color:var(--dock-muted);user-select:none;opacity:.65}
+
+.md{overflow-wrap:anywhere;font-size:13px;line-height:1.68;max-height:720px;overflow:auto;padding:2px 2px}
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{margin:16px 0 8px;line-height:1.3}
+.md h1{font-size:19px}.md h2{font-size:16.5px}.md h3{font-size:14.5px}.md h4,.md h5,.md h6{font-size:13.5px}
+.md h1:first-child,.md h2:first-child{margin-top:2px}
+.md p{margin:8px 0;color:var(--dock-text)}
+.md code{font-family:'Cascadia Mono',Consolas,monospace;font-size:12px;background:var(--dock-control);border-radius:5px;padding:1px 5px}
+.md pre{background:#0b0b0c;border:1px solid var(--dock-line);border-radius:12px;padding:10px 12px;overflow:auto;margin:10px 0}
+:root[data-dock-theme=light] .md pre{background:#f6f6f7}
+.md pre code{background:transparent;padding:0;font-size:12px;line-height:1.6}
+.md blockquote{margin:10px 0;padding:2px 0 2px 12px;border-left:3px solid var(--dock-line);color:var(--dock-muted)}
+.md ul,.md ol{margin:8px 0;padding-left:22px;color:var(--dock-text)}
+.md li{margin:3px 0}
+.md hr{border:0;border-top:1px solid var(--dock-line);margin:14px 0}
+.md a{color:var(--dock-accent);text-decoration:none}
+.md a:hover{text-decoration:underline}
+.md table{border-collapse:collapse;margin:10px 0;font-size:12.5px;display:block;overflow:auto}
+.md th,.md td{border:1px solid var(--dock-line);padding:5px 10px;text-align:left}
+.md th{background:var(--dock-card);font-weight:600}
+.md img{max-width:100%;border-radius:10px}
+.md .task{color:var(--dock-muted)}
+
+.figure{display:grid;gap:8px;justify-items:start}
+.figure img{max-width:100%;max-height:720px;border-radius:12px;background:var(--dock-card);border:1px solid var(--dock-line)}
+.figure img.zoomable{cursor:zoom-in;transition:filter .12s}
+.figure img.zoomable:hover{filter:brightness(1.06)}
+.figure .meta{font-size:11.5px;color:var(--dock-muted);font-variant-numeric:tabular-nums}
+
+/* 图片放大查看灯箱 */
+.lb-overlay{position:fixed;inset:0;z-index:2147483600;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,10,14,.92);backdrop-filter:blur(2px);user-select:none}
+.lb-overlay[hidden]{display:none}
+.lb-stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;width:100%;overflow:hidden;cursor:default}
+.lb-img{max-width:96vw;max-height:86vh;border-radius:8px;box-shadow:0 12px 60px rgba(0,0,0,.6);will-change:transform;transform-origin:center center}
+.lb-bar{display:flex;gap:8px;padding:10px 14px;align-items:center}
+.lb-btn{appearance:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#f2f4f8;font-size:13px;line-height:1;padding:6px 11px;border-radius:9px;cursor:pointer;min-width:34px}
+.lb-btn:hover{background:rgba(255,255,255,.20)}
+.lb-btn.wide{padding:6px 14px}
+.lb-btn.close{border-color:rgba(255,120,120,.5);background:rgba(220,80,80,.22)}
+.lb-tip{font-size:11px;color:rgba(255,255,255,.5);padding:0 14px 12px}
+
+.sheet{display:grid;gap:8px;margin:0 0 16px}
+.sheet h3{margin:0;font-size:12.5px;color:var(--dock-muted)}
+.sheet .grid{overflow:auto;max-height:440px;border:1px solid var(--dock-line);border-radius:12px}
+.sheet table{border-collapse:collapse;font-size:12px}
+.sheet td,.sheet th{border-right:1px solid var(--dock-line);border-bottom:1px solid var(--dock-line);padding:4px 9px;white-space:pre;max-width:400px;overflow:hidden;text-overflow:ellipsis;vertical-align:top}
+.sheet th{position:sticky;top:0;background:var(--dock-card);font-weight:600;z-index:1}
+.sheet tr:last-child td{border-bottom:0}
+.sheet td:last-child,.sheet th:last-child{border-right:0}
+
+.doc{max-height:720px;overflow:auto;padding-right:4px}
+.doc .para{margin:6px 0;overflow-wrap:anywhere}
+.doc .gap{height:8px}
+.doc .dh{margin:14px 0 6px;overflow-wrap:anywhere}
+.doc .dh.h1{font-size:17px}.doc .dh.h2{font-size:15px}.doc .dh.h3{font-size:14px}.doc .dh.h4,.doc .dh.h5,.doc .dh.h6{font-size:13.5px}
+.slides{display:grid;gap:12px;max-height:720px;overflow:auto}
+.slide{border:1px solid var(--dock-line);border-radius:14px;padding:10px 14px;background:var(--dock-card)}
+.slide h3{font-size:12px;color:var(--dock-muted);margin:0 0 8px;font-weight:600}
+.slide p{margin:3px 0;color:var(--dock-text);overflow-wrap:anywhere}
+
+.hint{border:1px dashed var(--dock-line);border-radius:14px;padding:16px;background:var(--dock-card)}
+.hint h3{margin:0 0 6px;font-size:13.5px}
+.hint p{margin:6px 0;color:var(--dock-muted);font-size:12.5px;overflow-wrap:anywhere}
+.hint .actions{margin-top:10px}
+
+/* 打开文件夹：路径输入 + 目录选择器 */
+#jump{margin:0 0 12px}
+#jump h2{font-size:12.5px;color:var(--dock-muted);margin:0 0 8px}
+#jump label{display:grid;gap:5px;font-size:12px;color:var(--dock-muted)}
+#jump input{width:100%;box-sizing:border-box;min-height:28px;padding:3px 10px;border-radius:10px;border:1px solid var(--dock-line);background:var(--dock-control);color:var(--dock-text);font:12px/1.5 'Cascadia Mono',Consolas,monospace}
+#jump .actions{display:flex;gap:8px;margin:8px 0 0}
+.picker{margin:12px 0 0;border:1px solid var(--dock-line);border-radius:14px;background:var(--dock-card);overflow:hidden}
+.picker-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--dock-line);flex-wrap:wrap}
+.picker-bar code{flex:1;min-width:0;font:11.5px/1.5 'Cascadia Mono',Consolas,monospace;color:var(--dock-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picker-list{max-height:320px;overflow:auto;padding:6px;display:grid;gap:2px}
+.picker-list .row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:5px 9px;font-weight:500;min-height:26px}
+.picker-list .row:hover{background:var(--dock-control)}
+.picker-list .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.picker-list .row .nm::before{content:'▸';display:inline-block;width:14px;margin-right:6px;color:var(--dock-accent)}
+.picker-list .note{padding:6px 9px;margin:0}
+
+.foot{margin:12px 0 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* 窄面板（宿主设置面板就是 520px）：双栏必须保住，只把左栏再压窄一点，
+   绝不 display:none —— 那样用户就永远看不到文件夹那一栏。 */
+@media(max-width:700px){
+  body[data-layout=double] .workspace{grid-template-rows:min(var(--side-h,280px),42%) 8px minmax(0,1fr);gap:4px}
+  header nav{width:100%}
+  /* 左栏只有一百多像素：大小/日期两列会把文件名挤成 "▶ .."，
+     窄栏下让位给文件名，只保留图标 + 名字。 */
+  body[data-layout=double] .filelist .row{grid-template-columns:20px 26px minmax(0,1fr);gap:0;padding:4px 7px}
+  body[data-layout=double] .filelist .row .st,
+  body[data-layout=double] .filelist .row .sz,
+  body[data-layout=double] .filelist .row .dt{display:none}
+  body[data-layout=double] .filelist .row .nm::before{width:12px;margin-right:4px}
+  body[data-layout=double] #browse-crumbs{font-size:11px;gap:2px}
+  body[data-layout=double] #browse-crumbs button{padding:1px 5px;min-height:20px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  body[data-layout=double] .browse-foot{gap:4px;padding-top:4px}
+  body[data-layout=double] .browse-foot button{padding:2px 6px;min-height:22px;font-size:11.5px}
+}
+@media(max-width:430px){
+  body[data-layout=double] .workspace{grid-template-rows:min(var(--side-h,280px),40%) 8px minmax(0,1fr);gap:3px}
+  #side{padding:8px}
+  #stage{padding:10px}
+}
+
+
+/* 插件内目录选择器：宿主没有 fish:hold 时的兜底，不弹原生对话框，面板不会失焦 */
+.dirpick{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:#0009;backdrop-filter:blur(2px)}
+.dirpick[hidden]{display:none}
+.dirpick-card{width:min(560px,86vw);max-height:min(560px,84vh);display:grid;grid-template-rows:auto auto minmax(120px,1fr) auto auto;gap:10px;background:var(--dock-card);border:1px solid var(--dock-line);border-radius:14px;padding:14px;box-shadow:0 18px 48px #000a}
+.dirpick-head{display:flex;align-items:center;justify-content:space-between;font-weight:600;font-size:13px}
+.dirpick-list{overflow:auto;min-height:120px;border:1px solid var(--dock-line);border-radius:10px;padding:4px}
+.dirpick-list .row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;cursor:pointer}
+.dirpick-list .row:hover{background:var(--dock-control)}
+.dirpick-list .row.sel{background:color-mix(in oklab,var(--dock-accent) 22%,transparent)}
+.dirpick-list .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dirpick-foot{display:flex;align-items:center;gap:8px}
+.dirpick-path{flex:1;min-width:0;background:var(--dock-control);border:1px solid var(--dock-line);border-radius:8px;color:var(--dock-text);padding:6px 9px;font-size:12.5px}

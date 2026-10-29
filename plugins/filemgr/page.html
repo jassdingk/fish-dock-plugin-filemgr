@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="dock.css">
+<link rel="stylesheet" href="page.css">
+<link rel="stylesheet" href="stash.css">
+<link rel="stylesheet" href="filemgr.css">
+<title>文件管理</title>
+</head>
+<body data-layout="double">
+<main class="fm">
+  <header class="fm-head">
+    <div class="identity">
+      <h1 id="title">文件管理</h1>
+      <span id="file-meta" class="fm-meta" role="status"></span>
+      <span id="state" role="status">正在加载…</span>
+    </div>
+  </header>
+
+  <p id="error" role="alert"></p>
+
+  <div class="fm-body">
+    <!-- ============ 左：文件暂存（中转站） ============ -->
+    <section id="stash-col" aria-label="文件暂存">
+      <h2 class="fm-col-title">文件暂存</h2>
+      <nav class="toolbar stash-toolbar" aria-label="暂存操作">
+        <button id="btn-copy-path" title="复制选中项的完整路径">复制路径</button>
+        <button id="btn-copy-file" title="把选中项复制为文件（可粘贴到资源管理器）">复制为文件</button>
+        <button id="btn-remove" title="从暂存移除选中项">移除</button>
+        <button id="btn-select-all" title="全选 / 取消全选">全选</button>
+      </nav>
+
+      <!-- 暂存区主体：分组标签 + 可折叠分组列表 + 拖入目标 -->
+      <section id="stash" aria-label="暂存区">
+        <!-- 暂存区顶部的分组标签栏：新建组按钮 + 可收起/展开的分组标签 -->
+        <section id="groupbar" aria-label="分组">
+          <div class="group-ops">
+            <button id="btn-group-new" class="ghost" title="在暂存区新建分组标签">＋ 新建组</button>
+            <input id="group-new-input" class="group-new-input" type="text" placeholder="分组名，回车确认"
+              maxlength="40" hidden autocomplete="off" spellcheck="false" aria-label="新分组名称" />
+            <button id="btn-group-new-ok" class="ghost" title="确认新建分组" hidden>确定</button>
+            <!-- 删除分组不再放独立按钮：直接用分组标签右侧的 ×（stash-tag-del）。 -->
+            <label class="move-label">移动到组
+              <select id="move-to">
+                <option value="">（未分组）</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <!-- 分组标签 + 折叠列表都在这里 -->
+        <div id="list" role="listbox" aria-multiselectable="true" aria-label="暂存的文件"></div>
+        <div id="empty" class="empty" hidden>
+          <p class="empty-icon">📥</p>
+          <p>暂存区是空的。</p>
+          <p class="note">从资源管理器把文件拖进来，或点上方「添加文件」。</p>
+        </div>
+        <div id="drop-overlay" hidden><span>松开即可加入暂存</span></div>
+      </section>
+
+      <p id="foot" class="note"></p>
+    </section>
+
+    <!-- 外层分隔条：拖动改变暂存栏宽度 -->
+    <div id="fmsplit" role="separator" aria-orientation="vertical" aria-label="拖动调整暂存栏与预览区宽度"
+         aria-valuemin="200" aria-valuemax="640" tabindex="0"
+         title="拖动调整左右宽度，双击恢复默认"></div>
+
+    <!-- ============ 右：文件预览（浏览 + 预览） ============ -->
+    <div id="preview-col">
+      <nav class="toolbar preview-toolbar" aria-label="浏览操作">
+        <button id="open" class="primary" title="在插件内浏览并选择文件夹（不会收起面板）">打开文件夹</button>
+        <button id="up" title="上一级">上一级</button>
+        <button id="refresh" title="刷新">刷新</button>
+        <button id="fav-open" title="常用文件夹" class="ghost">★</button>
+        <button id="fav-pin-btn" title="固定当前文件夹" class="ghost" hidden>📌</button>
+        <!-- 浮层必须放在 .preview-toolbar 里面：它是 position:relative 的定位祖先，
+             放到 nav 外面会以 #preview-col 为基准、top:100% 直接掉到整个预览列下面看不见。 -->
+        <div id="fav-pop" class="fav-pop" hidden>
+          <div id="fav-pinned" class="fav-section" hidden>
+            <div class="fav-label">固定</div>
+          </div>
+          <div id="fav-recent" class="fav-section">
+            <div class="fav-label">最近</div>
+          </div>
+        </div>
+      </nav>
+
+      <section id="jump" hidden>
+        <h2>手动输入路径</h2>
+        <form id="jump-form">
+          <label>文件夹绝对路径
+            <input id="jump-input" placeholder="F:\AI REP" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="actions">
+            <button type="submit" class="primary">打开</button>
+            <button type="button" id="jump-cancel">取消</button>
+          </div>
+        </form>
+        <p class="note">想挑文件夹直接点顶栏的「打开文件夹」，会弹出 Windows 系统自己的选择窗口。</p>
+      </section>
+
+      <div class="workspace">
+        <aside id="side">
+          <section id="browse" aria-label="文件夹">
+            <div id="browse-crumbs" class="crumbs"></div>
+            <div id="browse-tools" class="browse-tools">
+              <button id="browse-hidden" class="ghost tiny" type="button"
+                      title="显示或隐藏以 . 开头的文件、node_modules 等">显示隐藏</button>
+            </div>
+            <div id="browse-head" class="browse-head" role="row">
+              <span aria-hidden="true"></span><span aria-hidden="true"></span>
+              <button type="button" role="columnheader" data-sort="name">名称</button>
+              <button type="button" role="columnheader" data-sort="type">类型</button>
+              <button type="button" role="columnheader" data-sort="size">大小</button>
+              <button type="button" role="columnheader" data-sort="mtime">修改时间</button>
+            </div>
+            <div id="browse-list" class="filelist" aria-multiselectable="true"></div>
+            <div id="browse-foot" class="browse-foot">
+              <button id="browse-up" class="ghost" type="button">← 上一级</button>
+              <button id="browse-refresh" class="ghost" type="button">刷新</button>
+            </div>
+          </section>
+
+          <section id="loc" aria-label="位置">
+            <h2>位置</h2>
+            <nav id="roots" aria-label="根目录"></nav>
+            <button id="pick-native" class="ghost" title="调用 Windows 原生选择窗口（需要宿主支持 fish:hold，否则会自动改用内置选择器）">＋ 添加文件夹…</button>
+            <h2 id="recent-title">最近</h2>
+            <nav id="recent" aria-label="最近打开"></nav>
+            <button id="recent-clear" class="ghost">清空最近</button>
+            <p id="path-line" class="note" title=""></p>
+          </section>
+        </aside>
+        <div id="split" role="separator" aria-orientation="horizontal" aria-label="拖动调整上下两栏高度"
+             aria-valuemin="140" aria-valuemax="600" tabindex="0"
+             title="拖动调整上下高度，双击恢复默认"></div>
+        <section id="stage">
+          <div id="crumbs" class="crumbs"></div>
+          <div id="view"><p role="status">正在读取…</p></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+<!-- 框选矩形：position:fixed 跟随视口坐标，由 page.js 的 wireBrowseSelect() 控制显隐 -->
+<div id="rubber" aria-hidden="true"></div>
+<div id="dirpick" class="dirpick" hidden role="dialog" aria-modal="true" aria-label="选择文件夹">
+  <div class="dirpick-card">
+    <header class="dirpick-head">
+      <span id="dirpick-title">选择文件夹</span>
+      <button id="dirpick-close" class="ghost tiny" type="button" title="关闭">✕</button>
+    </header>
+    <div id="dirpick-crumbs" class="crumbs"></div>
+    <div id="dirpick-list" class="filelist dirpick-list" role="listbox" aria-label="子文件夹"></div>
+    <p id="dirpick-note" class="note"></p>
+    <footer class="dirpick-foot">
+      <button id="dirpick-up" class="ghost" type="button">← 上一级</button>
+      <input id="dirpick-path" class="dirpick-path" type="text" placeholder="也可直接粘贴完整路径" autocomplete="off" spellcheck="false">
+      <button id="dirpick-ok" class="primary" type="button">选择此文件夹</button>
+    </footer>
+  </div>
+</div>
+<script src="page.js"></script>
+</body>
+</html>
