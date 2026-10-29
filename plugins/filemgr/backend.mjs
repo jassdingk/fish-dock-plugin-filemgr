@@ -210,9 +210,8 @@ async function saveStashConfig() {
 }
 
 createPlugin({
-  // 宿主会通过 FISH_PLUGIN_ID 传当前包声明的 id；本地侧载是 wangning.preview，
-  // 提交到上游仓库后是 fish.filemgr，两者共用同一份代码。
-  id: process.env.FISH_PLUGIN_ID || 'wangning.preview',
+  // 宿主通过 FISH_PLUGIN_ID 传入当前包声明的 id；缺省时与 plugin.json 保持一致。
+  id: process.env.FISH_PLUGIN_ID || 'jassdingk.filemgr',
   activate: async ctx => {
     context = ctx
     const config = await loadConfig()

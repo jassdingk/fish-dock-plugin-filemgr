@@ -2,7 +2,7 @@
 
 把 FISH Dock 变成随手可用的文件工作台：上半逛目录、下半看内容，左边还能把常用文件先「暂存」起来，随时拖进别的程序。
 
-插件 id `fish.filemgr`，宿主 API 1，兼容 **FISH Dock v1.2.3 及更早的官方发行版**，不要求宿主做任何改动。
+插件 id `jassdingk.filemgr`，宿主 API 1，兼容 **FISH Dock v1.2.3 及更早的官方发行版**，不要求宿主做任何改动。
 
 ## 功能
 
@@ -55,14 +55,14 @@ node tools/build.mjs
 
 ```bash
 node tools/build.mjs
-# 产物 dist/fish.filemgr.fish-plugin，用 FISH Dock 插件页的「从文件安装」装上
+# 产物 dist/jassdingk.filemgr.fish-plugin，用 FISH Dock 插件页的「从文件安装」装上
 ```
 
 ### 方式三：装到插件目录
 
 ```bash
 node tools/build.mjs
-# 把 dist/filemgr 整个目录放到 %USERPROFILE%\.fish-dock\host\packages\fish.filemgr\<version>\<digest>\
+# 把 dist/filemgr 整个目录放到 %USERPROFILE%\.fish-dock\host\packages\jassdingk.filemgr\<version>\<digest>\
 ```
 
 两种产物都由 `tools/build.mjs` 一次生成。`sdk/` 里带的 `bridge.js` 与 `plugin.mjs` 是 FISH Dock v1.2.3 的原始副本，打包时会分别拷到包根目录的 `bridge.js` 和 `plugins/filemgr/sdk.mjs`——与官方 `tools/stage-development.mjs` 的做法一致。
