@@ -1,8 +1,8 @@
 // 打包「文件管理」插件为 .fish-plugin（zip 容器），并生成可直接加载的开发目录。
 // 用法：node tools/build.mjs [输出目录]
 // 产物：
-//   <out>/fish.filemgr.fish-plugin     整包（FISH Dock「从文件安装」直接用）
-//   <out>/filemgr/                     开发加载目录（含 plugin.json，指向本仓文件）
+//   <out>/jassdingk.filemgr.fish-plugin  整包（FISH Dock「从文件安装」直接用）
+//   <out>/filemgr/                       开发加载目录（含 plugin.json，指向本仓文件）
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
@@ -13,7 +13,10 @@ const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const outDir = process.argv[2] ? path.resolve(process.argv[2]) : path.join(repository, 'dist')
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
 
-const PLUGIN = { key: 'filemgr', id: 'fish.filemgr', name: '文件管理', directory: '.fishplugin-filemgr', capabilities: ['storage'] }
+// 从文件安装走宿主的第三方通道：id 必须 publisher.name，publisher 不能是官方保留的 fish，
+// 且 storage.directory 必须严格等于 .plugin.{publisher}.{name}
+// （校验见 Wakuwaku/src-tauri/src/storage.rs:76-82）。
+const PLUGIN = { key: 'filemgr', id: 'jassdingk.filemgr', name: '文件管理', directory: '.plugin.jassdingk.filemgr', capabilities: ['storage'] }
 
 // 插件目录里除这些之外的文件一律不进包
 const SKIP = name => name.includes('.test.') || name.endsWith('.cs') || name === 'stage.mjs'
