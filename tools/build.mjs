@@ -19,9 +19,9 @@ const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
 const PLUGIN = { key: 'filemgr', id: 'jassdingk.filemgr', name: '文件管理', directory: '.plugin.jassdingk.filemgr', capabilities: ['storage'] }
 
 // 插件目录里除这些之外的文件一律不进包
-const SKIP = name => name.includes('.test.') || name.endsWith('.cs') || name === 'stage.mjs'
+const SKIP = name => name.includes('.test.') || name.endsWith('.cs') || name === 'stage.mjs' || name === 'README.md'
 
-// 打包清单：插件目录全部文件 + SDK 两个文件（路径 -> 包内路径）
+// 打包清单：插件目录全部文件 + 根 README.md + SDK 两个文件（路径 -> 包内路径）
 function collect() {
   const files = new Map()
   const pluginDir = path.join(repository, 'plugins', PLUGIN.key)
@@ -29,6 +29,9 @@ function collect() {
     if (!entry.isFile() || SKIP(entry.name)) continue
     files.set(`plugins/${PLUGIN.key}/${entry.name}`, path.join(pluginDir, entry.name))
   }
+  // 宿主强制要求包根目录有当前版本的 README.md（plugin_package.rs:46，
+  // 且 files.len() 必须严格等于 manifest.files.len()+1），所以插件说明要放到根上。
+  files.set('README.md', path.join(pluginDir, 'README.md'))
   files.set('bridge.js', path.join(repository, 'sdk', 'browser', 'bridge.js'))
   files.set(`plugins/${PLUGIN.key}/sdk.mjs`, path.join(repository, 'sdk', 'node', 'plugin.mjs'))
   return files
