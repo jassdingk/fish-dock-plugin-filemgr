@@ -1,3 +1,0 @@
-createPlugin({
-  // 宿主通过 FISH_PLUGIN_ID 传入当前包声明的 id；缺省时与 plugin.json 保持一致。
-  id: process.env.FISH_PLUGIN_ID || 'jassdingk.filemgr',
