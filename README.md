@@ -44,14 +44,22 @@
 
 ## 安装
 
-### 方式一：npm（最省事）
+### 方式一：直接下载安装包（最省事，不需要 Node）
+
+去 [Releases](../../releases/latest) 下载 **`jassdingk.filemgr.fish-plugin`**，然后在 FISH Dock 里：
+
+**设置 → 扩展 → 从文件安装** → 选中刚下载的文件 → 重启 FISH Dock。
+
+不需要装 Node，不需要命令行。
+
+### 方式二：npm 命令行
 
 ```bash
 npm i -g fish-dock-plugin-filemgr
 fish-dock-filemgr            # 校验 + 拷到宿主 packages 目录 + 写注册表
 ```
 
-装完重启 FISH Dock 即可。其它子命令：
+装完重启 FISH Dock 即可。需要 Node.js ≥ 18。其它子命令：
 
 ```bash
 fish-dock-filemgr --dry-run     # 只校验包完整性，不写磁盘
@@ -59,14 +67,15 @@ fish-dock-filemgr --path        # 只打印 .fish-plugin 路径，自己拖进�
 fish-dock-filemgr --uninstall   # 从宿主注册表移除本插件
 ```
 
-### 方式二：打过发行包，走宿主「从文件安装」
+### 方式三：从源码自己构建
 
 ```bash
+npm install
 npm run build
 # 产物 dist/jassdingk.filemgr.fish-plugin，用 FISH Dock 插件页的「从文件安装」装上
 ```
 
-### 方式三：开发加载
+### 方式四：开发加载
 
 ```bash
 npm run build
