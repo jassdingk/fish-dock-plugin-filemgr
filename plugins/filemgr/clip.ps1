@@ -1,4 +1,4 @@
-# 把命令行参数列出的文件路径设入剪贴板 FileDrop 列表。
+﻿# 把命令行参数列出的文件路径设入剪贴板 FileDrop 列表。
 # 用法：powershell -File clip.ps1 <file1> [file2 ...]
 # 无参数时清空 FileDrop 列表。
 

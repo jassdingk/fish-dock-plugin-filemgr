@@ -64,7 +64,7 @@
   // 上栏高度边界，与 backend.mjs 的 SIDE_MIN / SIDE_MAX 保持一致。
   const SIDE_MIN = 140
   const SIDE_MAX = 600
-  const SIDE_DEFAULT = 360
+  const SIDE_DEFAULT = 420
 
   // 把后端/宿主返回的错误规整成一句人话。后端约定返回 {ok:false,error:"文案"}，
   // 但宿主协议层错误是 {code,message} 对象（例如后端版本旧、方法不存在），
@@ -1121,12 +1121,12 @@
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && !box.hidden) closeDirPick() })
   }
 
-  // 默认走插件内自绘选择器：不弹系统窗口，宿主失焦也不会收起面板，任何宿主都能用。
-  // 只有显式点「＋ 添加文件夹…」且宿主提供了 hold（自行编译的宿主），才走 Windows 原生对话框。
+  // 有宿主 hold 就走原生对话框（体验好），没有就走自绘选择器（不失焦）
   function canHold() { return typeof FishDock !== 'undefined' && typeof FishDock.hold === 'function' }
-  async function openNativeFolder(force) {
+  function setHold(on) { try { FishDock.hold?.(!!on) } catch { /* 宿主没注入 hold 时忽略 */ } }
+  async function openNativeFolder() {
     if (nativeBusy) return
-    if (!force || !canHold()) {
+    if (!canHold()) {
       await drawDirPick(state.path || state.home || '')
       return
     }
@@ -1167,7 +1167,7 @@
     } finally {
       nativeBusy = false
       // 选完（或取消/报错）立刻放开临时锁，恢复「点外面能关面板」的正常行为。
-      FishDock.hold?.(false)
+      setHold(false)
     }
   }
 
@@ -1315,8 +1315,6 @@
 
   async function bootPreview() {
     wireDirPick()
-    // 进页不再锁面板：用户要求把锁定时机收到「点打开文件夹之前」那一刻，
-    // 平时浏览、拖放都不该把宿主面板钉住。锁定/解锁都在 openNativeFolder 里成对处理。
     const row = await call('preview.roots')
     state.roots = row.roots || []
     state.recent = row.recent || []
@@ -1844,8 +1842,9 @@
         paint()
       }
       baseSel = Array.from(state.browseSel)
-      // 捕获指针：保证拖到暂存区上方松手时 pointerup 仍然回到列表上
-      try { list.setPointerCapture(event.pointerId) } catch { /* 老 WebView 不支持就靠冒泡 */ }
+      // 注意：这里【不能】立刻 setPointerCapture。行是 <button>，指针被祖先列表捕获后
+      // WebView2 不再派发行的 click → 真机鼠标点文件夹"没反应"（UIA 的 Invoke 直接派
+      // DOM click，所以测试看着正常）。只有确认是拖动（moved 之后）才捕获，纯点击交还原生 click。
     })
 
     list.addEventListener('pointermove', event => {
@@ -1861,6 +1860,9 @@
         mode = 'box'
         document.body.dataset.boxing = 'true'
         rubber.classList.add('on')
+        // 确认是拖动后才捕获指针：保证拖到暂存区上方松手时 pointerup 仍回到列表，
+        // 同时不影响"纯点击不捕获"，让行的 click 正常触发打开/预览。
+        try { list.setPointerCapture(event.pointerId) } catch { /* 老 WebView 不支持就靠冒泡 */ }
       }
       // 指针已经拖出列表、且起手处有选中项 → 这一趟是想搬去暂存区，切成拖拽态。
       const inside = !!document.elementFromPoint(event.clientX, event.clientY)?.closest('#browse-list')

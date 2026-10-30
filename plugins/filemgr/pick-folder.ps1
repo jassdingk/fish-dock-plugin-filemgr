@@ -1,4 +1,4 @@
-# 弹出 Windows 原生"选择文件夹"对话框，把选中的绝对路径写到 stdout。
+﻿# 弹出 Windows 原生"选择文件夹"对话框，把选中的绝对路径写到 stdout。
 # 取消或出错时不输出任何内容，退出码 2。
 # 用 IFileOpenDialog + FOS_PICKFOLDERS（见同目录 FolderPicker.cs），
 # 与 FISH Dock 宿主 paper.rs:588 是同一个 COM 接口，外观即系统"选择文件夹"。

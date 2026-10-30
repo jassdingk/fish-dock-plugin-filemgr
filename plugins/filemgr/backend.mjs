@@ -128,10 +128,10 @@ let context = null
 let extraRoots = []
 let layout = 'single'
 // 上栏（文件夹窗口）高度，单位像素。拖动上下分隔条时改它，存在 prefs.json 里，下次打开还是这个高度。
-let sideW = 360
+let sideW = 420
 const SIDE_MIN = 140
 const SIDE_MAX = 600
-const SIDE_DEFAULT = 360
+const SIDE_DEFAULT = 420
 // 非法值（NaN / 空 / 负数）一律回默认 360，只有合法数字才夹到 [140,600]。
 // 注意别写成 `Number(v) || 0` —— 那样 NaN 会变 0，再被 max 抬成 140，
 // 用户明明没拖过却被记成最窄。

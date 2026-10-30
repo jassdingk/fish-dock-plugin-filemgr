@@ -155,7 +155,7 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
   width:20px;height:20px;padding:0;border:0;border-radius:4px;
   font-size:14px;line-height:1;color:var(--dock-muted);cursor:pointer;
   background:transparent;transition:color .12s,background .12s;
-  opacity:.38;
+  opacity:.55;
 }
 /* 图标列：目录 📁 / 文件 📄。空着会让 "+" 和文件名之间出现一大块空白。 */
 .filelist .row .ni{display:flex;align-items:center;justify-content:center;width:26px;height:26px;font-size:12px;line-height:1}
@@ -239,4 +239,17 @@ body[data-dragging=true]{user-select:none;cursor:grabbing}
   background:var(--dock-accent);color:#1a1035;font-weight:600;
   box-shadow:0 6px 18px rgba(0,0,0,.45);
 }
+
+/* ---- 文件管理页（double 布局）：让文件夹区更紧凑、能一屏看到更多条目 ----
+   之前行高 28px + 上栏只占 55%，44 个目录一屏只看得到 7 项，看起来像"显示不全"。
+   这里把行压到 25px、上栏提到 62%，并把符号列略缩，保证一屏能看到约 15 项。 */
+body[data-layout=double] #preview-col .filelist .row{padding:3px 8px;min-height:25px;font-size:12.5px}
+body[data-layout=double] #preview-col .filelist .row .ni{width:22px;height:22px}
+body[data-layout=double] #preview-col .filelist .row .nm{gap:5px}
+body[data-layout=double] #preview-col .browse-head{grid-template-columns:20px 22px minmax(0,1fr) 58px 62px 96px}
+body[data-layout=double] #preview-col .filelist .row{grid-template-columns:20px 22px minmax(0,1fr) 58px 62px 96px}
+
+/* 点中一行时给一个清晰的按键反馈，避免"点了不知道有没有生效"的错觉 */
+.filelist .row:active{background:color-mix(in srgb,var(--dock-accent) 22%,transparent)}
+
 

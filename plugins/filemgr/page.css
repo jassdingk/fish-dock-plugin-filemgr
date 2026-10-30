@@ -18,7 +18,7 @@ body[data-layout=double] main{display:flex;flex-direction:column;height:820px}
 body[data-layout=double] .workspace{
   flex:1 1 auto;
   min-height:0;
-  grid-template-rows:min(var(--side-h,280px),55%) 8px minmax(0,1fr);
+  grid-template-rows:min(var(--side-h,420px),62%) 8px minmax(0,1fr);
   grid-template-columns:minmax(0,1fr);
   gap:5px;
   align-items:stretch;

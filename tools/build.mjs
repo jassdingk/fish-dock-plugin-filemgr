@@ -21,10 +21,24 @@ const PLUGIN = { key: 'filemgr', id: 'jassdingk.filemgr', name: '文件管理', 
 // 插件目录里除这些之外的文件一律不进包
 const SKIP = name => name.includes('.test.') || name.endsWith('.cs') || name === 'stage.mjs' || name === 'README.md'
 
+// Windows PowerShell 5.1 读 .ps1 时没有 BOM 就按系统 ANSI（中文机器是 GBK）解码，
+// 脚本里的 UTF-8 中文注释会被拆成乱码字节，连引号都可能被吃掉 → ParserError。
+// 打包前统一补 BOM，避免编辑器保存时把 BOM 弄丢导致插件里的原生对话框直接报错。
+function ensurePs1Bom(pluginDir) {
+  for (const entry of fs.readdirSync(pluginDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.ps1')) continue
+    const p = path.join(pluginDir, entry.name)
+    const bytes = fs.readFileSync(p)
+    if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) continue
+    fs.writeFileSync(p, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), bytes]))
+  }
+}
+
 // 打包清单：插件目录全部文件 + 根 README.md + SDK 两个文件（路径 -> 包内路径）
 function collect() {
   const files = new Map()
   const pluginDir = path.join(repository, 'plugins', PLUGIN.key)
+  ensurePs1Bom(pluginDir)
   for (const entry of fs.readdirSync(pluginDir, { withFileTypes: true })) {
     if (!entry.isFile() || SKIP(entry.name)) continue
     files.set(`plugins/${PLUGIN.key}/${entry.name}`, path.join(pluginDir, entry.name))
@@ -53,7 +67,7 @@ function stage(out) {
     schema: 1,
     id: PLUGIN.id,
     name: PLUGIN.name,
-    version: '1.0.0',
+    version: '1.0.3',
     hostApi: 1,
     platforms: ['windows-x86_64'],
     storage: { directory: PLUGIN.directory, dataSchema: 1 },

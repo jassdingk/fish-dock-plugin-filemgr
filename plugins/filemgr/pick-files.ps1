@@ -1,4 +1,4 @@
-# 弹出 Windows 原生"选择文件"多选对话框，把选中的绝对路径（每行一个）写到 stdout。
+﻿# 弹出 Windows 原生"选择文件"多选对话框，把选中的绝对路径（每行一个）写到 stdout。
 # 取消或出错时不输出任何内容，退出码 2。
 # 使用 FolderPicker.cs 的 IFileOpenDialog + FOS_ALLOWMULTISELECT，
 # 与 pick-folder.ps1 一致（同一套 COM 代码，已验证能弹窗在前台）。
