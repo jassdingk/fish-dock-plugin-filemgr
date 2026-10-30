@@ -1486,6 +1486,27 @@
       summary.append(el('span', { class: 'stash-tag-dot' }))
       summary.append(el('span', { class: 'stash-tag-name', text: bucket.label }))
       summary.append(el('span', { class: 'stash-tag-count', text: `(${bucket.items.length})` }))
+      // 组内「全选 / 取消」：只作用于本组条目；多组叠加互不影响（不 clear 其它组的选中）。
+      // drawList 每次都重建，按钮状态直接从 state.selected 现算，天然同步。
+      if (bucket.items.length) {
+        const ids = bucket.items.map(i => i.id)
+        const allOn = ids.every(id => state.selected.has(id))
+        const toggleBucket = ev => {
+          ev.preventDefault(); ev.stopPropagation()
+          if (allOn) { for (const id of ids) state.selected.delete(id) }
+          else { for (const id of ids) state.selected.add(id) }
+          guard(draw)()
+        }
+        summary.append(el('span', {
+          class: 'stash-tag-select' + (allOn ? ' all' : ''), role: 'button', tabindex: '0',
+          'aria-pressed': String(allOn),
+          title: allOn
+            ? `取消全选「${bucket.label}」（${bucket.items.length} 项）`
+            : `全选「${bucket.label}」（${bucket.items.length} 项，不影响其它分组已选）`,
+          onclick: toggleBucket,
+          onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') toggleBucket(ev) },
+        }, allOn ? '取消' : '全选'))
+      }
       // 筛选按钮：切换「只看本组 / 全部」。用文字而不是 ⌕/◉ 图标——
       // 图标在这个尺寸下根本认不出是干什么的（可读优先）。
       summary.append(el('span', {
@@ -1665,10 +1686,12 @@
     await refresh()
   })
   $('btn-select-all').onclick = () => {
-    const items = visibleItems()
-    const all = items.every(i => state.selected.has(i.id))
-    state.selected.clear()
-    if (!all) for (const i of items) state.selected.add(i.id)
+    // 只切换「当前可见」条目，不再粗暴 clear —— 以免和分组标签上的组内全选互相冲突。
+    const ids = visibleItems().map(i => i.id)
+    if (!ids.length) return
+    const all = ids.every(id => state.selected.has(id))
+    if (all) for (const id of ids) state.selected.delete(id)
+    else for (const id of ids) state.selected.add(id)
     draw()
   }
 
