@@ -260,3 +260,12 @@ body[data-layout=double] #preview-col .filelist .row{grid-template-columns:20px 
 .filelist .row:active{background:color-mix(in srgb,var(--dock-accent) 22%,transparent)}
 
 
+/* ---- 窄屏（≤700px）覆盖带 #preview-col 的 6 列定义 ----
+   page.css 里的窄屏断点写的是 ody[data-layout=double] .browse-head（specificity 0,2,1），
+   而上面 256/257 行的 ody[data-layout=double] #preview-col .browse-head 含 id（1,2,1），
+   specificity 更高且本文件后加载 → 窗口变窄时列宽仍然是 6 列，「名称」列头被挤成 0 宽。
+   所以必须在同一文件、同形选择器里再覆盖一次。 */
+@media(max-width:700px){
+  body[data-layout=double] #preview-col .browse-head{grid-template-columns:20px 26px minmax(0,1fr);gap:0}
+  body[data-layout=double] #preview-col .filelist .row{grid-template-columns:20px 26px minmax(0,1fr);gap:0;padding:4px 7px}
+}

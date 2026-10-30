@@ -10,8 +10,8 @@
 .group-ops,.tag-ops{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .group-ops{margin:0 0 10px}
 button.ghost{background:transparent;border-style:dashed;opacity:.85}
-.move-label{display:flex;align-items:center;gap:6px;margin:0;color:var(--dock-muted);font-size:12px}
-#move-to{width:auto;min-width:120px;min-height:26px;padding:2px 8px;font-size:12px}
+.move-label{display:flex;align-items:center;gap:6px;margin:0;color:var(--dock-muted);font-size:12px;white-space:nowrap;flex:0 0 auto}
+#move-to{width:auto;min-width:120px;min-height:26px;padding:2px 8px;font-size:12px;flex:0 1 auto}
 .tag-filter{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
 .tag-filter:empty{margin:0}
 .chip{display:inline-flex;align-items:center;gap:4px;min-height:22px;padding:1px 10px;border:1px solid var(--dock-line);border-radius:999px;background:var(--dock-control);color:var(--dock-text);font-size:11.5px;cursor:pointer}
@@ -52,3 +52,16 @@ button.ghost{background:transparent;border-style:dashed;opacity:.85}
 .empty{text-align:center;padding:36px 12px}
 .empty-icon{font-size:30px;margin:0 0 6px}
 .empty p{margin:4px 0}
+
+/* 窄屏（≤700px）：分组操作条一行放不下「新建组 + 移动到组」时允许整组换行，
+   但「移动到组」内部绝不竖排断字 —— 标签 nowrap，下拉框自适应收缩，
+   否则会出现「移 动 到 组」逐字换行。 */
+@media(max-width:700px){
+  #stash-col .group-ops{gap:6px}
+  #stash-col .move-label{gap:5px;font-size:11.5px;max-width:100%}
+  #stash-col #move-to{min-width:0;flex:0 1 auto;max-width:150px;padding:2px 6px}
+}
+@media(max-width:430px){
+  #stash-col .move-label{flex:1 1 100%;justify-content:space-between}
+  #stash-col #move-to{width:auto;flex:0 1 60%;max-width:60%;min-width:0}
+}

@@ -182,6 +182,12 @@ pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right
   body[data-layout=double] .filelist .row .sz,
   body[data-layout=double] .filelist .row .dt{display:none}
   body[data-layout=double] .filelist .row .nm::before{width:12px;margin-right:4px}
+  /* 表头必须跟着行一起塌成 3 列，否则 6 列的表头会把「名称」列头挤成 0 宽
+     （行已隐藏 st/sz/dt，表头对应的 span/button 要同步隐藏）。 */
+  body[data-layout=double] .browse-head{grid-template-columns:20px 26px minmax(0,1fr);gap:0}
+  body[data-layout=double] .browse-head > *:nth-child(n+4){display:none}
+  /* 徽标可收缩，别把文件名压成单字符 */
+  body[data-layout=double] .filelist .row .nm .stash-badge{flex:0 1 auto;min-width:0;max-width:5em}
   body[data-layout=double] #browse-crumbs{font-size:11px;gap:2px}
   body[data-layout=double] #browse-crumbs button{padding:1px 5px;min-height:20px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   body[data-layout=double] .browse-foot{gap:4px;padding-top:4px}
@@ -191,6 +197,10 @@ pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right
   body[data-layout=double] .workspace{grid-template-rows:min(var(--side-h,280px),40%) 8px minmax(0,1fr);gap:3px}
   #side{padding:8px}
   #stage{padding:10px}
+  /* 超窄栏里徽标即使收缩也只剩一两个字，会把文件名挤没。
+     直接隐藏徽标，靠 .row.stashed / aria-stashed 的 accent 变色识别「已暂存」。 */
+  body[data-layout=double] .filelist .row .nm .stash-badge,
+  body[data-layout=double] #preview-col .filelist .row .nm .stash-badge{display:none}
 }
 
 
