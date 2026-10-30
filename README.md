@@ -44,25 +44,33 @@
 
 ## 安装
 
-### 方式一：打开发目录（给开发加载用）
+### 方式一：npm（最省事）
 
 ```bash
-node tools/build.mjs
-# 产物 dist/filemgr 就是一个完整的开发目录（含 plugin.json），交给 FISH Dock 开发加载即可
+npm i -g fish-dock-plugin-filemgr
+fish-dock-filemgr            # 校验 + 拷到宿主 packages 目录 + 写注册表
 ```
 
-### 方式二：直接打发行包
+装完重启 FISH Dock 即可。其它子命令：
 
 ```bash
-node tools/build.mjs
+fish-dock-filemgr --dry-run     # 只校验包完整性，不写磁盘
+fish-dock-filemgr --path        # 只打印 .fish-plugin 路径，自己拖进宿主「从文件安装」
+fish-dock-filemgr --uninstall   # 从宿主注册表移除本插件
+```
+
+### 方式二：打过发行包，走宿主「从文件安装」
+
+```bash
+npm run build
 # 产物 dist/jassdingk.filemgr.fish-plugin，用 FISH Dock 插件页的「从文件安装」装上
 ```
 
-### 方式三：装到插件目录
+### 方式三：开发加载
 
 ```bash
-node tools/build.mjs
-# 把 dist/filemgr 整个目录放到 %USERPROFILE%\.fish-dock\host\packages\jassdingk.filemgr\<version>\<digest>\
+npm run build
+# 产物 dist/filemgr 就是一个完整的开发目录（含 plugin.json），交给 FISH Dock 开发加载即可
 ```
 
 两种产物都由 `tools/build.mjs` 一次生成。`sdk/` 里带的 `bridge.js` 与 `plugin.mjs` 是 FISH Dock v1.2.3 的原始副本，打包时会分别拷到包根目录的 `bridge.js` 和 `plugins/filemgr/sdk.mjs`——与官方 `tools/stage-development.mjs` 的做法一致。
@@ -100,6 +108,8 @@ sdk/
   node/plugin.mjs      后端 SDK（官方 v1.2.3 原版）
 tools/
   build.mjs            打发行包 / 开发目录
+bin/
+  fish-dock-filemgr.mjs  npm 全局命令：校验 + 安装 / 卸载插件
 ```
 
 ## 许可

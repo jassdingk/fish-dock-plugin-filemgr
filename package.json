@@ -1,0 +1,46 @@
+{
+  "name": "fish-dock-plugin-filemgr",
+  "version": "1.0.4",
+  "description": "FISH Dock 文件管理插件：目录浏览 + 文件预览（Markdown / 图片 / Office / 代码）+ 文件暂存中转站，兼容 FISH Dock v1.2.3 及更早官方发行版。",
+  "type": "module",
+  "bin": {
+    "fish-dock-filemgr": "bin/fish-dock-filemgr.mjs"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "install-plugin": "node bin/fish-dock-filemgr.mjs",
+    "prepack": "node tools/build.mjs"
+  },
+  "keywords": [
+    "fish-dock",
+    "fishdock",
+    "plugin",
+    "file-manager",
+    "file-preview",
+    "markdown",
+    "stash",
+    "windows"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jassdingk/fish-dock-plugin-filemgr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jassdingk/fish-dock-plugin-filemgr/issues"
+  },
+  "homepage": "https://github.com/jassdingk/fish-dock-plugin-filemgr#readme",
+  "author": "jassdingk",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ]
+}
