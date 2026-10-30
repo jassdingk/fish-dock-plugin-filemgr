@@ -82,6 +82,13 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
   border:1px solid color-mix(in srgb,var(--dock-line) 90%,transparent);color:var(--dock-muted);background:transparent}
 .stash-tag-filter:hover{color:var(--dock-text);border-color:var(--dock-accent)}
 .stash-tag-filter.on{color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent);font-weight:700}
+/* 标签内「全选 / 取消」按钮：与「只看」同款胶囊，全选态高亮，多组各自独立 */
+.stash-tag-select{flex:none;padding:1px 8px;font-size:11px;line-height:1.5;cursor:pointer;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--dock-line) 90%,transparent);color:var(--dock-muted);background:transparent}
+.stash-tag-select:hover{color:var(--dock-text);border-color:var(--dock-accent)}
+.stash-tag-select.all{color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent);font-weight:700}
+.stash-group>.stash-tag.active>.stash-tag-select{color:#1a1035;border-color:color-mix(in srgb,#1a1035 45%,transparent);background:transparent}
+.stash-group>.stash-tag.active>.stash-tag-select.all{background:#1a1035;color:var(--dock-accent);border-color:#1a1035}
 .stash-group-empty{margin:6px 8px 10px;color:var(--dock-muted);font-size:11.5px}
 #stash-col #stash{padding:8px;margin:0;overflow:hidden;min-height:0;border:1px solid var(--dock-line);border-radius:12px;background:var(--dock-bg);display:flex;flex-direction:column;gap:6px;position:relative}
 #stash-col #stash>#list{flex:1 1 auto;min-height:0;overflow:auto;padding:0}
