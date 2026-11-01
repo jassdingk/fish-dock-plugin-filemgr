@@ -71,6 +71,14 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
 .stash-group>.stash-tag.active>.stash-tag-count{opacity:.8}
 .stash-group>.stash-tag.active>.stash-tag-del{color:#1a1035;opacity:.75}
 .stash-group>.stash-tag.active>.stash-tag-del:hover{color:#7a1010}
+/* 拖动文件悬停到某个分组标签上：高亮该分组名，提示松手即落入此分组 */
+.stash-group>.stash-tag.drop-hover{
+  color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--dock-accent) 40%,transparent);
+}
+.stash-group>.stash-tag.drop-hover>.stash-tag-dot{background:#1a1035}
+.stash-group>.stash-tag.drop-hover>.stash-tag-count{opacity:.85}
+.stash-group>.stash-tag.drop-hover>.stash-tag-del{color:#1a1035;opacity:.75}
 /* 右侧文件列表：已在暂存/分组里的文件 */
 .filelist .row.stashed .nm{color:var(--dock-accent)}
 .stash-badge{flex:none;font-size:10px;line-height:1;padding:2px 6px;border-radius:999px;

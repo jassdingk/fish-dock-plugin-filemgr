@@ -3,7 +3,7 @@ const CATEGORIES = new Set(['credentials','roster','keys','config','exports','ba
 const DEFAULT_LIMIT = 1024 * 1024;
 export function createPlugin({ id, input = process.stdin, output = process.stdout,
   activate = async () => {}, deactivate = async () => {}, onEvent = async () => {}, commands = {},
-  onError = () => {}, maxLine = DEFAULT_LIMIT, requestTimeout = 5000 } = {}) {
+  onError = () => {}, maxLine = DEFAULT_LIMIT, requestTimeout = 12000 } = {}) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id ?? '')) throw new Error('插件 ID 格式无效');
   if (!Number.isSafeInteger(maxLine) || maxLine < 128 || maxLine > DEFAULT_LIMIT) throw new Error('协议帧大小无效');
   if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 30000) throw new Error('宿主调用时限无效');
@@ -94,7 +94,10 @@ export function createPlugin({ id, input = process.stdin, output = process.stdou
     if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('插件协议应为 JSON 对象');
     if (!Object.hasOwn(row,'method')) {
       const waiter = pending.get(row.id);
-      if (!waiter) throw new Error('宿主响应编号不匹配');
+      // 迟到/重复的宿主响应（原请求已因超时被清理）：静默丢弃，绝不让整个插件会话崩溃。
+      // 原实现此处 throw 会经 receive() → close()+onError() 杀死插件；任何一次超过
+      // requestTimeout 的存储调用，其迟到响应都会触发。调用方早已通过超时 reject 感知失败。
+      if (!waiter) return;
       pending.delete(row.id); clearTimeout(waiter.timer);
       if (Object.hasOwn(row,'result') === Object.hasOwn(row,'error')) return waiter.reject(new Error('宿主响应结构无效'));
       if (row.error) waiter.reject(new Error('宿主存储操作失败')); else waiter.resolve(row.result);

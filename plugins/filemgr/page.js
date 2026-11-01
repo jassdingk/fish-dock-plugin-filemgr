@@ -1472,6 +1472,7 @@
 
       const summary = el('summary', {
         class: 'stash-tag' + (active ? ' active' : ''),
+        dataset: { group: bucket.key },   // 供拖拽命中：拖到此标签上即高亮该组名并落入该分组
         title: `${bucket.label} · ${bucket.items.length} 项（点箭头/整条折叠；点右侧漏斗图标只在看本组与全部间切换）`,
       })
       // 单击整条标签 = 折叠/展开（summary 默认行为，不拦截）。
@@ -1765,11 +1766,12 @@
   // 批量加入（框选后拖进暂存区走这一条）。
   // 后端 stash.add 本来就吃 paths 数组，所以只是把多行一次性递过去；
   // 逐个报告"加了几项/几项重复"，比只弹一个含糊的 toast 更好懂。
-  async function addManyToStash(paths) {
+  async function addManyToStash(paths, group) {
     const list = (paths || []).filter(Boolean)
     if (!list.length) return
-    const group = state.view === 'all' ? '' : state.view
-    const row = await callSoft('stash.add', { paths: list, group })
+    // 显式传入的分组（拖到某个分组标签上）优先；未指定时回退到当前视图分组。
+    const targetGroup = group === undefined ? (state.view === 'all' ? '' : state.view) : group
+    const row = await callSoft('stash.add', { paths: list, group: targetGroup })
     if (row && row.ok) {
       const added = Array.isArray(row.items) ? row.items.length : 0
       const dup = list.length - added
@@ -1800,6 +1802,7 @@
     let moved = false
     let suppressClick = false
     let ghost = null
+    let dropGroup = undefined     // 拖拽时命中的分组标签 key（undefined=未命中，回退当前视图）
 
     const rows = () => Array.from(list.querySelectorAll('.row[data-path]'))
 
@@ -1836,6 +1839,8 @@
       if (ghost) { ghost.remove(); ghost = null }
       for (const node of list.querySelectorAll('.row.drag-src')) node.classList.remove('drag-src')
       if (stashCol) stashCol.classList.remove('drop-target')
+      dropGroup = undefined
+      for (const node of document.querySelectorAll('.stash-tag.drop-hover')) node.classList.remove('drop-hover')
     }
 
     list.addEventListener('pointerdown', event => {
@@ -1920,8 +1925,14 @@
       } else if (mode === 'drag' && ghost) {
         ghost.style.left = `${event.clientX + 14}px`
         ghost.style.top = `${event.clientY + 14}px`
-        const over = stashCol && document.elementFromPoint(event.clientX, event.clientY)?.closest('#stash-col')
+        const under = document.elementFromPoint(event.clientX, event.clientY)
+        const over = stashCol && under?.closest('#stash-col')
         if (stashCol) stashCol.classList.toggle('drop-target', !!over)
+        // 命中哪个分组标签，就高亮哪个分组名并把它作为落点；未命中分组标签则回退当前视图分组。
+        const hitTag = under && under.closest('.stash-tag[data-group]')
+        dropGroup = hitTag ? hitTag.dataset.group : undefined
+        for (const node of document.querySelectorAll('.stash-tag.drop-hover')) node.classList.remove('drop-hover')
+        if (hitTag) hitTag.classList.add('drop-hover')
       }
       event.preventDefault()
     })
@@ -1930,6 +1941,7 @@
       if (mode === 'idle') return
       const was = mode
       const paths = dragPaths.slice()
+      const group = dropGroup            // 松手前记录命中的分组（reset 会清空）
       const dropped = was === 'drag' && !!(
         stashCol && document.elementFromPoint(event.clientX, event.clientY)?.closest('#stash-col')
       )
@@ -1940,7 +1952,7 @@
         setTimeout(() => { suppressClick = false }, 0)
       }
       reset()
-      if (dropped && paths.length) await addManyToStash(paths)
+      if (dropped && paths.length) await addManyToStash(paths, group)
     }
 
     list.addEventListener('pointerup', event => { finish(event) })
