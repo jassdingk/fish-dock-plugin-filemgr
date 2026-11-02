@@ -2,6 +2,7 @@
 // 所有业务方法都返回 {ok:true,...} 或 {ok:false,error}，便于页面显示真实原因。
 import path from 'node:path'
 import fs from 'node:fs'
+import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createPlugin } from './sdk.mjs'
@@ -158,6 +159,161 @@ function guard(fn) {
 }
 
 function activeRoots() { return roots(extraRoots) }
+
+// ---- 全局文件搜索：遍历「位置」里所有根目录，按文件名匹配关键字 ----
+// 宿主对单次插件调用有 15 秒硬超时，这里用 8 秒 deadline + 扫描/命中上限主动收敛，
+// 并把系统/缓存等超大类目录跳过，避免全盘扫描拖死页面。
+const SEARCH_HIDDEN = new Set([
+  'node_modules', '.git', '.svn', '.hg', '__pycache__', '.idea', '.vscode', 'target', 'dist', '.next', '.cache',
+  '$RECYCLE.BIN', 'System Volume Information', 'AppData', 'Windows', 'Program Files', 'Program Files (x86)',
+  'ProgramData', 'Recovery', 'PerfLogs', '$WinREAgent', 'OneDriveTemp',
+])
+async function searchFiles(query, list) {
+  const raw = String(query || '').trim()
+  const needle = raw.toLowerCase()
+  if (!needle) return { query: raw, results: [], scanned: 0, dirs: 0, truncated: false, timedOut: false }
+  const MAX_RESULTS = 300
+  const MAX_SCAN = 80000
+  const MAX_DEPTH = 14
+  const deadline = Date.now() + 8000
+  const results = []
+  let scanned = 0
+  let dirs = 0
+  let truncated = false
+  let timedOut = false
+  const stack = list.map(r => ({ dir: r.path, depth: 0, root: r.label }))
+  while (stack.length) {
+    if (results.length >= MAX_RESULTS || scanned >= MAX_SCAN || Date.now() > deadline) { truncated = true; timedOut = Date.now() > deadline; break }
+    const cur = stack.pop()
+    let ents
+    try { ents = await fs.promises.readdir(cur.dir, { withFileTypes: true }) } catch { continue }
+    dirs++
+    for (const e of ents) {
+      if (results.length >= MAX_RESULTS || scanned >= MAX_SCAN || Date.now() > deadline) { truncated = true; timedOut = Date.now() > deadline; break }
+      const name = e.name
+      if (!name || name.startsWith('.')) continue
+      if (e.isSymbolicLink && e.isSymbolicLink()) continue
+      const isDir = e.isDirectory()
+      if (isDir && SEARCH_HIDDEN.has(name)) continue
+      const full = path.join(cur.dir, name)
+      scanned++
+      if (!isDir) {
+        if (name.toLowerCase().includes(needle)) {
+          let size = 0, mtime = 0
+          try { const s = await fs.promises.stat(full); size = s.size; mtime = s.mtimeMs } catch { /* 用 0 兜底 */ }
+          results.push({ name, path: full, dir: cur.dir, root: cur.root, size, mtime })
+        }
+      } else if (cur.depth < MAX_DEPTH) {
+        stack.push({ dir: full, depth: cur.depth + 1, root: cur.root })
+      }
+    }
+  }
+  results.sort((a, b) => {
+    const ea = a.name.toLowerCase() === needle ? 1 : 0
+    const eb = b.name.toLowerCase() === needle ? 1 : 0
+    if (ea !== eb) return eb - ea
+    return (b.mtime || 0) - (a.mtime || 0)
+  })
+  return { query: raw, results, scanned, dirs, truncated, timedOut }
+}
+
+// ---- Everything 索引搜索（优先）：调用本机 Everything 的 HTTP JSON 接口 ----
+// Everything 用 NTFS USN/MFT 索引，全盘搜索是毫秒级；没装/没开则返回 null，让上层回退到 searchFiles 遍历。
+// 端口优先 8090（本机已配），再试默认 80 / 8080；命中后缓存端口。
+const EVERYTHING_PORTS = [8090, 80, 8080]
+let everythingPort = null
+
+function httpGetJson(url, timeoutMs) {
+  return new Promise(resolve => {
+    let req
+    try {
+      req = http.get(url, res => {
+        let body = ''
+        res.on('data', d => { body += d })
+        res.on('end', () => { try { resolve(JSON.parse(body)) } catch { resolve(null) } })
+        res.on('error', () => resolve(null))
+      })
+    } catch { return resolve(null) }
+    req.on('error', () => resolve(null))
+    req.setTimeout(timeoutMs, () => { try { req.destroy() } catch { /* ignore */ } resolve(null) })
+  })
+}
+
+async function probeEverything(requireHits) {
+  // 缓存端口也必须验证存活：用户可能随时关掉 Everything，不能盲信缓存否则不会触发重新拉起
+  if (everythingPort) {
+    const j = await httpGetJson(`http://127.0.0.1:${everythingPort}/?json=1&search=&count=1`, 1500)
+    if (j && typeof j.totalResults === 'number' && (!requireHits || j.totalResults > 0)) return everythingPort
+    everythingPort = null  // 已失效，清缓存，下面重新探测（必要时由 searchViaEverything 拉起）
+  }
+  for (const p of EVERYTHING_PORTS) {
+    const j = await httpGetJson(`http://127.0.0.1:${p}/?json=1&search=&count=1`, 1500)
+    if (j && typeof j.totalResults === 'number' && (!requireHits || j.totalResults > 0)) { everythingPort = p; return p }
+  }
+  return null
+}
+
+// 首次启用 / 用户没开 Everything 时：后台拉起主程序，不弹出窗口（-minimized + windowsHide）。
+function findEverythingExe() {
+  const cands = [
+    process.env.EVERYTHING_EXE,
+    'D:\\Everything\\Everything.exe',
+    'C:\\Program Files\\Everything\\Everything.exe',
+    'C:\\Program Files (x86)\\Everything\\Everything.exe',
+  ]
+  for (const p of cands) { try { if (p && fs.existsSync(p)) return p } catch { /* ignore */ } }
+  return null
+}
+
+function spawnEverythingBackground() {
+  const exe = findEverythingExe()
+  if (!exe) return false
+  try {
+    // -startup：按 ini 的 minimize_to_tray=1 隐藏到托盘（-minimized 只是最小化到任务栏，仍占任务栏）
+    const child = spawn(exe, ['-startup'], { detached: true, stdio: 'ignore', windowsHide: true })
+    child.unref()
+    return true
+  } catch { return false }
+}
+
+async function waitForEverything(maxWaitMs) {
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    const p = await probeEverything(true)  // 等到索引真的有命中，而不只是 HTTP 通了
+    if (p) return p
+    await new Promise(r => setTimeout(r, 800))
+  }
+  return null
+}
+
+function filetimeToMs(ft) {
+  const n = Number(ft)
+  return Number.isFinite(n) && n > 0 ? Math.round(n / 10000 - 11644473600000) : 0
+}
+
+async function searchViaEverything(query, maxResults) {
+  let port = await probeEverything()
+  if (!port) {
+    // 首次启用 / 用户没开 Everything：后台拉起（-minimized + windowsHide，不显示窗口），最多等 10 秒索引就绪
+    if (spawnEverythingBackground()) port = await waitForEverything(10000)
+    if (!port) return null
+  }
+  // 用双引号包裹用户输入，避免 . * ? 空格等被 Everything 当作搜索语法解析
+  const wrapped = '"' + String(query).replace(/"/g, '') + '"'
+  const count = Math.max(1, Math.min(maxResults || 300, 1000))
+  const url = `http://127.0.0.1:${port}/?json=1&search=${encodeURIComponent(wrapped)}&count=${count}&path_column=1&size_column=1&date_modified_column=1`
+  const j = await httpGetJson(url, 8000)
+  if (!j || !Array.isArray(j.results)) return null
+  const results = j.results.map(x => {
+    const parent = x.path || ''
+    const full = parent ? path.join(parent, x.name || '') : (x.name || '')
+    return {
+      name: x.name || '', path: full, dir: parent,
+      isDir: x.type === 'folder', size: Number(x.size) || 0, mtime: filetimeToMs(x.date_modified),
+    }
+  })
+  return { query, results, total: j.totalResults || results.length, source: 'everything' }
+}
 
 async function loadConfig() {
   const raw = await context.storage.read('config', 'prefs.json').catch(() => null)
@@ -330,6 +486,17 @@ createPlugin({
     'preview.kind': guard(async params => {
       const row = await meta(params.path, activeRoots())
       return { name: row.name, ext: row.ext, kind: row.isDir ? 'dir' : kindOf(row.ext), size: row.size, mtime: row.mtime }
+    }),
+
+    // 全局文件搜索：有 Everything 走它的索引（秒级全盘），没有则回退 searchFiles 遍历
+    'preview.search': guard(async params => {
+      const q = String(params.query || '').trim()
+      if (q) {
+        const via = await searchViaEverything(q, 300)
+        if (via) return { ...via, scanned: null, dirs: null, truncated: via.total > via.results.length, timedOut: false }
+      }
+      const r = await searchFiles(q, activeRoots())
+      return { ...r, source: 'scan' }
     }),
 
     // ── stash 命令 ──────────────────────────────────────────────

@@ -11,6 +11,19 @@ body.fm-layout, main.fm{height:820px;display:flex;flex-direction:column;padding:
 .fm-head .fm-meta{color:var(--dock-muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:52vw}
 .fm-head .fm-meta:empty{display:none}
 
+/* 预览工具栏右侧的全局搜索框（在「📌 固定当前文件夹」右边） */
+.search-box{display:flex;align-items:center;gap:4px;margin-left:auto;min-width:0;max-width:260px;flex:0 1 auto}
+.search-box input[type=search]{width:180px;min-width:80px;height:26px;padding:0 9px;font:inherit;font-size:12px;color:var(--dock-fg);background:var(--dock-control);border:1px solid var(--dock-line);border-radius:999px;outline:none}
+.search-box input[type=search]:focus{border-color:var(--dock-accent)}
+.search-box #search-clear{margin:0;padding:2px 7px;border-radius:999px;flex:none}
+.search-head{padding:6px 2px 8px;color:var(--dock-muted);font-size:12px}
+/* 搜索结果行用独立类 srow，彻底避开 .filelist .row 的多套列宽/隐藏规则冲突 */
+.search-list .srow{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,0.9fr) 74px;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:5px 9px;min-height:28px;cursor:pointer;font:inherit;color:inherit}
+.search-list .srow:hover{background:var(--dock-control)}
+.search-list .srow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;text-align:left;color:var(--dock-fg);font-size:13px}
+.search-list .srow .dt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dock-muted);font-size:11px;text-align:left}
+.search-list .srow .sz{text-align:right;color:var(--dock-muted);font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+
 /* 错误条跨全宽 */
 main.fm > #error{margin:0 8px 8px;flex:none}
 

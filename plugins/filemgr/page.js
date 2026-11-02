@@ -1311,6 +1311,94 @@
     guard(() => openPath(value))()
   }
 
+  // ---------------------------------------------------------------- 全局文件搜索
+  // 固定当前文件夹按钮右侧的搜索框：停止输入 350ms 或回车后，检索所有已添加磁盘/根目录的文件。
+  let searchTimer = null
+  let searchSeq = 0
+
+  function twoUp(dir) {
+    const parts = String(dir || '').split(/[\\/]+/).filter(Boolean)
+    if (parts.length <= 2) return parts.join('\\')
+    return '…\\' + parts.slice(-2).join('\\')
+  }
+
+  function drawSearchResults(query, row) {
+    const view = clear($('view'))
+    const count = row ? row.results.length : 0
+    let headText
+    if (row && row.source === 'everything') {
+      headText = `搜索「${query}」：找到 ${count} 项（Everything 索引，共匹配 ${row.total} 项）`
+      if (row.truncated) headText += `，仅显示前 ${count} 项`
+    } else {
+      headText = `搜索「${query}」：找到 ${count} 项（扫描 ${row ? row.scanned : 0} 个文件）`
+      if (row && row.truncated) headText += row.timedOut ? '，已达时间上限，结果可能不全' : '，已达数量上限，结果可能不全'
+    }
+    view.append(el('div', { class: 'search-head' }, [el('span', { text: headText })]))
+    if (!row || !count) {
+      view.append(el('p', { class: 'empty', text: row && row.scanned ? '没有匹配的文件' : '没有可搜索的磁盘或目录' }))
+      return
+    }
+    const list = el('div', { class: 'filelist search-list' })
+    for (const item of row.results) {
+      list.append(el('button', {
+        type: 'button', class: 'srow',
+        title: item.path,
+        onclick: guard(async () => {
+          $('search-input').value = ''
+          $('search-clear').hidden = true
+          await openPath(item.path)
+        }),
+      }, [
+        el('span', { class: 'nm', text: item.name }),
+        el('span', { class: 'dt', text: twoUp(item.dir) }),
+        el('span', { class: 'sz', text: bytes(item.size) }),
+      ]))
+    }
+    view.append(list)
+  }
+
+  function wireSearch() {
+    const box = $('search-input')
+    const clearBtn = $('search-clear')
+    if (!box) return
+    const run = async () => {
+      const query = box.value.trim()
+      if (clearBtn) clearBtn.hidden = !query
+      if (!query) {
+        // 清空搜索：恢复当前目录/文件视图
+        if (state.file) guard(() => openFile(state.file.path))()
+        else if (state.path) guard(() => openDir(state.path))()
+        else drawDir()
+        return
+      }
+      const seq = ++searchSeq
+      say('正在搜索…')
+      bad('')
+      try {
+        const row = await call('preview.search', { query })
+        if (seq !== searchSeq) return
+        say('')
+        drawSearchResults(query, row)
+      } catch (error) {
+        if (seq !== searchSeq) return
+        say('')
+        bad(error && error.message ? error.message : String(error))
+      }
+    }
+    box.addEventListener('input', () => {
+      const query = box.value.trim()
+      if (clearBtn) clearBtn.hidden = !query
+      if (searchTimer) { clearTimeout(searchTimer); searchTimer = null }
+      if (!query) { run(); return }
+      searchTimer = setTimeout(() => { searchTimer = null; run() }, 350)
+    })
+    box.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); if (searchTimer) { clearTimeout(searchTimer); searchTimer = null } run() }
+      else if (event.key === 'Escape') { box.value = ''; if (clearBtn) clearBtn.hidden = true; run() }
+    })
+    if (clearBtn) clearBtn.onclick = () => { box.value = ''; clearBtn.hidden = true; run() }
+  }
+
   // ---------------------------------------------------------------- 启动
 
   async function bootPreview() {
@@ -2046,6 +2134,7 @@
   wireFmSplit()
   wireSplitter()
   wireBrowseSelect()
+  wireSearch()
   drawSide()
   // 两套 boot 只读数据、不互斥；不能用 guard（它会因共享 state.busy 把第二个启动挡掉）。
   const bootSafe = fn => Promise.resolve().then(fn).catch(error => bad(error && error.message ? error.message : String(error)))
