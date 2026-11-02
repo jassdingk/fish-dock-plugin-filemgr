@@ -110,13 +110,11 @@ fs.copyFileSync(path.join(DEV, 'plugin.json'), path.join(target, 'plugin.json'))
 say(`${C.dim}落盘${C.r}   ${target}`)
 
 // ---------- 写注册表 ----------
-// 宿主 Manifest::parse 用 serde(deny_unknown_fields) + camelCase，且 backend.args / locksSettings
-// 有 serde(default)——注册表里存的是解析后的 to_value 结果，所以这两个字段要显式补上。
-const full = {
-  ...manifest,
-  backend: { ...manifest.backend, args: manifest.backend?.args ?? [] },
-  locksSettings: manifest.locksSettings ?? false,
-}
+// 注册表里的 manifest 直接存包内 plugin.json 原样即可。
+// 切勿额外塞 Manifest 结构之外的字段——宿主用 serde(deny_unknown_fields) 解析注册表，
+// 遇到未知字段会整份解析失败，进而导致启动时所有插件后端都不拉起（实测 locksSettings 就是这种多余字段）。
+// backend.args 等 serde(default) 字段可省略，宿主会自动补默认值。
+const full = manifest
 
 const registry = fs.existsSync(REGISTRY) ? JSON.parse(fs.readFileSync(REGISTRY, 'utf8')) : { schema: 1, entries: {} }
 registry.entries = registry.entries || {}

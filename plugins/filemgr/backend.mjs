@@ -21,12 +21,6 @@ function logCrash(where, error) {
 process.on('uncaughtException', error => logCrash('uncaughtException', error))
 process.on('unhandledRejection', error => logCrash('unhandledRejection', error))
 
-// [诊断探针] 宿主每次 spawn 本后端都会留下这行痕迹，用于判定"宿主到底有没有拉起插件"。
-try {
-  const fs = await import('node:fs')
-  fs.appendFileSync(path.join(HERE, '_spawn-probe.log'),
-    `${new Date().toISOString()} pid=${process.pid} argv=${JSON.stringify(process.argv)} cwd=${process.cwd()} node=${process.execPath}\n`)
-} catch { /* 探针失败不影响业务 */ }
 
 // 宿主对插件方法的单次调用有 15 秒硬超时（plugin_runtime.rs:42），
 // 而用户挑文件夹可能盯着一分钟。所以选择操作拆成两步：
