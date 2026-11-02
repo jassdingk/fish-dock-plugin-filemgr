@@ -168,28 +168,26 @@ const SEARCH_HIDDEN = new Set([
   '$RECYCLE.BIN', 'System Volume Information', 'AppData', 'Windows', 'Program Files', 'Program Files (x86)',
   'ProgramData', 'Recovery', 'PerfLogs', '$WinREAgent', 'OneDriveTemp',
 ])
-async function searchFiles(query, list) {
-  const raw = String(query || '').trim()
-  const needle = raw.toLowerCase()
-  if (!needle) return { query: raw, results: [], scanned: 0, dirs: 0, truncated: false, timedOut: false }
-  const MAX_RESULTS = 300
-  const MAX_SCAN = 80000
-  const MAX_DEPTH = 14
-  const deadline = Date.now() + 8000
+const MAX_DEPTH = 16
+// 每个根目录单独扫描、并发推进：避免某一根（如 C:\Users 用户目录）先把总配额吃光，
+// 导致其它盘（D:/E:/...）根本没扫到 —— 这正是「经常检索不到」的主因。
+const PER_ROOT_SCAN = 60000
+const MAX_RESULTS = 800
+const MAX_SCAN_TOTAL = 400000
+const SEARCH_DEADLINE_MS = 12000 // 宿主单次调用硬超时 15s，留 3s 余量
+
+async function scanRoot(root, needle, deadline, budget) {
   const results = []
   let scanned = 0
-  let dirs = 0
   let truncated = false
-  let timedOut = false
-  const stack = list.map(r => ({ dir: r.path, depth: 0, root: r.label }))
+  const stack = [{ dir: root.path, depth: 0 }]
   while (stack.length) {
-    if (results.length >= MAX_RESULTS || scanned >= MAX_SCAN || Date.now() > deadline) { truncated = true; timedOut = Date.now() > deadline; break }
+    if (scanned >= budget || Date.now() > deadline) { truncated = true; break }
     const cur = stack.pop()
     let ents
     try { ents = await fs.promises.readdir(cur.dir, { withFileTypes: true }) } catch { continue }
-    dirs++
     for (const e of ents) {
-      if (results.length >= MAX_RESULTS || scanned >= MAX_SCAN || Date.now() > deadline) { truncated = true; timedOut = Date.now() > deadline; break }
+      if (scanned >= budget || Date.now() > deadline) { truncated = true; break }
       const name = e.name
       if (!name || name.startsWith('.')) continue
       if (e.isSymbolicLink && e.isSymbolicLink()) continue
@@ -201,20 +199,47 @@ async function searchFiles(query, list) {
         if (name.toLowerCase().includes(needle)) {
           let size = 0, mtime = 0
           try { const s = await fs.promises.stat(full); size = s.size; mtime = s.mtimeMs } catch { /* 用 0 兜底 */ }
-          results.push({ name, path: full, dir: cur.dir, root: cur.root, size, mtime })
+          results.push({ name, path: full, dir: cur.dir, root: root.label, size, mtime })
         }
       } else if (cur.depth < MAX_DEPTH) {
-        stack.push({ dir: full, depth: cur.depth + 1, root: cur.root })
+        stack.push({ dir: full, depth: cur.depth + 1 })
       }
     }
   }
-  results.sort((a, b) => {
+  return { results, scanned, truncated }
+}
+
+async function searchFiles(query, list) {
+  const raw = String(query || '').trim()
+  const needle = raw.toLowerCase()
+  if (!needle) return { query: raw, results: [], scanned: 0, dirs: 0, truncated: false, timedOut: false }
+  const deadline = Date.now() + SEARCH_DEADLINE_MS
+  // 每个根并发，单根预算 PER_ROOT_SCAN；总体上限 MAX_SCAN_TOTAL 兜底。
+  const parts = await Promise.all(list.map(r => scanRoot(r, needle, deadline, PER_ROOT_SCAN)))
+  const seen = new Set()
+  const all = []
+  let scanned = 0
+  let truncated = false
+  for (const p of parts) {
+    scanned += p.scanned
+    if (p.truncated) truncated = true
+    for (const it of p.results) {
+      const key = it.path.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      all.push(it)
+      if (all.length >= MAX_SCAN_TOTAL) { truncated = true; break }
+    }
+  }
+  all.sort((a, b) => {
     const ea = a.name.toLowerCase() === needle ? 1 : 0
     const eb = b.name.toLowerCase() === needle ? 1 : 0
     if (ea !== eb) return eb - ea
     return (b.mtime || 0) - (a.mtime || 0)
   })
-  return { query: raw, results, scanned, dirs, truncated, timedOut }
+  if (all.length > MAX_RESULTS) { truncated = true }
+  const results = all.slice(0, MAX_RESULTS)
+  return { query: raw, results, scanned, dirs: 0, truncated, timedOut: Date.now() > deadline, total: all.length }
 }
 
 // ---- Everything 索引搜索（优先）：调用本机 Everything 的 HTTP JSON 接口 ----

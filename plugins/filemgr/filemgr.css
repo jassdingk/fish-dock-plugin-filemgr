@@ -12,8 +12,10 @@ body.fm-layout, main.fm{height:820px;display:flex;flex-direction:column;padding:
 .fm-head .fm-meta:empty{display:none}
 
 /* 预览工具栏右侧的全局搜索框（在「📌 固定当前文件夹」右边） */
-.search-box{display:flex;align-items:center;gap:4px;margin-left:auto;min-width:0;max-width:260px;flex:0 1 auto}
-.search-box input[type=search]{width:180px;min-width:80px;height:26px;padding:0 9px;font:inherit;font-size:12px;color:var(--dock-fg);background:var(--dock-control);border:1px solid var(--dock-line);border-radius:999px;outline:none}
+.search-box{display:flex;align-items:center;gap:4px;margin-left:8px;min-width:120px;flex:1 1 auto}
+.search-box input[type=search]{width:100%;min-width:80px;height:26px;padding:0 9px;font:inherit;font-size:12px;color:var(--dock-fg);background:var(--dock-control);border:1px solid var(--dock-line);border-radius:999px;outline:none}
+/* 工具栏里的按钮固定宽度，搜索框加宽时不被压缩，「固定当前文件夹」等功能不受影响 */
+#preview-col .preview-toolbar > button{flex:none}
 .search-box input[type=search]:focus{border-color:var(--dock-accent)}
 .search-box #search-clear{margin:0;padding:2px 7px;border-radius:999px;flex:none}
 .search-head{padding:6px 2px 8px;color:var(--dock-muted);font-size:12px}
