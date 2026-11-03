@@ -9,6 +9,8 @@ using System.Runtime.InteropServices;
 
 namespace FishDockPick
 {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct COMDLG_FILTERSPEC { public string pszName; public string pszSpec; }
     [ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"),
      InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     internal interface IFileDialog
@@ -160,6 +162,10 @@ namespace FishDockPick
                 dlg.SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
 
                 if (!string.IsNullOrEmpty(title)) dlg.SetTitle(title);
+
+                // 尝试显示文件类型下拉（文件夹对话框可能忽略）
+                try { var spec = new COMDLG_FILTERSPEC { pszName = "所有文件", pszSpec = "*.*" }; IntPtr fp = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(COMDLG_FILTERSPEC))); Marshal.StructureToPtr(spec, fp, false); dlg.SetFileTypes(1, fp); } catch { }
+                try { dlg.SetFileNameLabel("文件名"); } catch { }
 
                 if (!string.IsNullOrEmpty(initial))
                 {

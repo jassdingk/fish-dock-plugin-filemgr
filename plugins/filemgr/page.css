@@ -53,13 +53,17 @@ body[data-layout=double] #side{grid-template-rows:minmax(0,1fr);gap:0}
 #loc{display:grid;gap:4px;min-width:0;max-height:340px;overflow:auto;border-top:1px solid var(--dock-line);padding-top:8px}
 body[data-layout=double] #loc{display:none}
 
-#side h2{font-size:11.5px;color:var(--dock-muted);text-transform:none;letter-spacing:0;margin:2px 0 4px}
+#side h2{font-size:12px;color:var(--dock-muted);text-transform:none;letter-spacing:0;margin:2px 0 4px}
 #roots,#recent{display:grid;gap:2px}
 #roots button,#recent button{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-color:transparent;background:transparent;font-weight:500;min-height:26px;padding:3px 10px}
 #roots button:hover,#recent button:hover{background:var(--dock-control)}
 #roots button[aria-current=true],#recent button[aria-current=true]{background:var(--dock-line);border-color:var(--dock-line)}
-button.ghost{background:transparent;border-color:transparent;color:var(--dock-muted);font-weight:500;min-height:24px;padding:2px 10px}
-#path-line{font-size:11.5px;overflow-wrap:anywhere;margin:10px 0 0;max-height:88px;overflow:auto}
+/* 符号按钮（★/📌/✕/←）与文字按钮视觉统一：同高、同字形、固定宽度防胶囊变形 */
+button.ghost{background:transparent;border-color:transparent;color:var(--dock-muted);font-weight:500;min-height:26px;padding:2px 10px}
+/* 符号按钮（★/📌/✕）与文字按钮视觉统一：同高、同字形、固定宽度防胶囊变形；"← 上一级"是文字按钮不在此列 */
+#fav-pin-btn{min-height:28px;min-width:28px;padding:2px 8px;font-size:14px;line-height:1}
+#search-clear{min-width:26px;padding:2px 8px;font-size:13px;line-height:1}
+#path-line{font-size:12px;overflow-wrap:anywhere;margin:10px 0 0;max-height:88px;overflow:auto}
 
 #stage{margin:0;padding:12px 14px 18px;min-width:0;min-height:0;overflow:auto}
 body[data-layout=double] #stage{border:1px solid var(--dock-line);border-radius:18px;background:var(--dock-card)}
@@ -79,14 +83,14 @@ body[data-layout=double] #view{height:100%;min-height:0}
 .filelist .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .filelist .row .nm::before{content:'';display:inline-block;width:14px;text-align:center;margin-right:6px;color:var(--dock-muted)}
 .filelist .row.dir .nm::before{content:'▸';color:var(--dock-accent)}
-.filelist .row .sz,.filelist .row .dt{color:var(--dock-muted);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.filelist .row .sz,.filelist .row .dt{color:var(--dock-muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .filelist .empty{color:var(--dock-muted);padding:10px 4px}
 
 .preview-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
 .preview-head h2{font-size:13.5px;margin:0;overflow-wrap:anywhere}
-.preview-head .badge{font-size:11px;color:var(--dock-muted);border:1px solid var(--dock-line);border-radius:999px;padding:1px 9px}
+.preview-head .badge{font-size:12px;color:var(--dock-muted);border:1px solid var(--dock-line);border-radius:999px;padding:1px 9px}
 
-pre.body{white-space:pre;overflow:auto;max-height:720px;margin:0;padding:10px 12px;border-radius:12px;background:#0b0b0c;border:1px solid var(--dock-line);font:12px/1.62 'Cascadia Mono',Consolas,'Courier New',monospace;tab-size:2}
+pre.body{white-space:pre;overflow:auto;max-height:720px;margin:0;padding:10px 12px;border-radius:12px;background:var(--dock-bg);border:1px solid var(--dock-line);font:12px/1.62 'Cascadia Mono',Consolas,'Courier New',monospace;tab-size:2}
 :root[data-dock-theme=light] pre.body{background:#f6f6f7}
 pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right;color:var(--dock-muted);user-select:none;opacity:.65}
 
@@ -96,7 +100,7 @@ pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right
 .md h1:first-child,.md h2:first-child{margin-top:2px}
 .md p{margin:8px 0;color:var(--dock-text)}
 .md code{font-family:'Cascadia Mono',Consolas,monospace;font-size:12px;background:var(--dock-control);border-radius:5px;padding:1px 5px}
-.md pre{background:#0b0b0c;border:1px solid var(--dock-line);border-radius:12px;padding:10px 12px;overflow:auto;margin:10px 0}
+.md pre{background:var(--dock-bg);border:1px solid var(--dock-line);border-radius:12px;padding:10px 12px;overflow:auto;margin:10px 0}
 :root[data-dock-theme=light] .md pre{background:#f6f6f7}
 .md pre code{background:transparent;padding:0;font-size:12px;line-height:1.6}
 .md blockquote{margin:10px 0;padding:2px 0 2px 12px;border-left:3px solid var(--dock-line);color:var(--dock-muted)}
@@ -115,7 +119,7 @@ pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right
 .figure img{max-width:100%;max-height:720px;border-radius:12px;background:var(--dock-card);border:1px solid var(--dock-line)}
 .figure img.zoomable{cursor:zoom-in;transition:filter .12s}
 .figure img.zoomable:hover{filter:brightness(1.06)}
-.figure .meta{font-size:11.5px;color:var(--dock-muted);font-variant-numeric:tabular-nums}
+.figure .meta{font-size:12px;color:var(--dock-muted);font-variant-numeric:tabular-nums}
 
 /* 图片放大查看灯箱 */
 .lb-overlay{position:fixed;inset:0;z-index:2147483600;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,10,14,.92);backdrop-filter:blur(2px);user-select:none}
@@ -127,7 +131,7 @@ pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right
 .lb-btn:hover{background:rgba(255,255,255,.20)}
 .lb-btn.wide{padding:6px 14px}
 .lb-btn.close{border-color:rgba(255,120,120,.5);background:rgba(220,80,80,.22)}
-.lb-tip{font-size:11px;color:rgba(255,255,255,.5);padding:0 14px 12px}
+.lb-tip{font-size:12px;color:rgba(255,255,255,.5);padding:0 14px 12px}
 
 .sheet{display:grid;gap:8px;margin:0 0 16px}
 .sheet h3{margin:0;font-size:12.5px;color:var(--dock-muted)}
@@ -188,10 +192,10 @@ pre.body .ln{display:inline-block;width:3.2em;margin-right:10px;text-align:right
   body[data-layout=double] .browse-head > *:nth-child(n+4){display:none}
   /* 徽标可收缩，别把文件名压成单字符 */
   body[data-layout=double] .filelist .row .nm .stash-badge{flex:0 1 auto;min-width:0;max-width:5em}
-  body[data-layout=double] #browse-crumbs{font-size:11px;gap:2px}
+  body[data-layout=double] #browse-crumbs{font-size:12px;gap:2px}
   body[data-layout=double] #browse-crumbs button{padding:1px 5px;min-height:20px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   body[data-layout=double] .browse-foot{gap:4px;padding-top:4px}
-  body[data-layout=double] .browse-foot button{padding:2px 6px;min-height:22px;font-size:11.5px}
+  body[data-layout=double] .browse-foot button{padding:2px 6px;min-height:24px;font-size:12px}
 }
 @media(max-width:430px){
   body[data-layout=double] .workspace{grid-template-rows:min(var(--side-h,280px),40%) 8px minmax(0,1fr);gap:3px}

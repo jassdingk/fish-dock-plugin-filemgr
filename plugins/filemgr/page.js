@@ -1126,10 +1126,6 @@
   function setHold(on) { try { FishDock.hold?.(!!on) } catch { /* 宿主没注入 hold 时忽略 */ } }
   async function openNativeFolder() {
     if (nativeBusy) return
-    if (!canHold()) {
-      await drawDirPick(state.path || state.home || '')
-      return
-    }
     nativeBusy = true
     // 只有这一刻才临时锁面板：原生对话框会抢走焦点，宿主 onBlur 会把设置面板收掉，
     // 用户选完文件夹回来页面就没了。所以先 hold(true)，选完在 finally 里放开。
@@ -1415,9 +1411,10 @@
     if (Number.isFinite(row.sideW)) state.sideW = row.sideW
     drawSide()
     updatePinBtn()
-    // 固定落到默认文件夹（F:\AI REP），最近记录只留在侧栏，不抢占启动视图。
-    const home = state.home || state.roots[0]?.path || ''
-    if (home) await openDir(home)
+    // 打开上次浏览过的文件夹（持久化在 prefs.json 的 recent[0]），重启/重载后仍回到上次位置；
+    // 没有最近记录时再回落到默认 home（F:\AI REP）。
+    const last = state.recent[0] || state.home || state.roots[0]?.path || ''
+    if (last) await openDir(last)
     else { clear($('view')).append(el('p', { class: 'note', text: '没有可访问的根目录。' })); say('就绪') }
   }
 

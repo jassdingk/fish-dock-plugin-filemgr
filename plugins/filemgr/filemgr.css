@@ -23,8 +23,8 @@ body.fm-layout, main.fm{height:820px;display:flex;flex-direction:column;padding:
 .search-list .srow{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,0.9fr) 74px;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:5px 9px;min-height:28px;cursor:pointer;font:inherit;color:inherit}
 .search-list .srow:hover{background:var(--dock-control)}
 .search-list .srow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;text-align:left;color:var(--dock-fg);font-size:13px}
-.search-list .srow .dt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dock-muted);font-size:11px;text-align:left}
-.search-list .srow .sz{text-align:right;color:var(--dock-muted);font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.search-list .srow .dt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dock-muted);font-size:12px;text-align:left}
+.search-list .srow .sz{text-align:right;color:var(--dock-muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* 错误条跨全宽 */
 main.fm > #error{margin:0 8px 8px;flex:none}
@@ -58,9 +58,9 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
 /* 分组操作条：现在是暂存区内部的一行，不再单独占 grid 行 */
 #stash-col #groupbar{padding:0;margin:0;background:transparent;border:0;min-height:0}
 #stash-col #groupbar .group-ops{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0}
-#stash-col #groupbar button{min-height:24px;padding:1px 9px;font-size:11.5px}
+#stash-col #groupbar button{min-height:26px;padding:1px 9px;font-size:12px}
 /* 内联新建分组输入框（不依赖 window.prompt，WebView2 里 prompt 可能被禁用） */
-#stash-col #groupbar .group-new-input{min-height:24px;padding:1px 8px;font-size:11.5px;min-width:110px;
+#stash-col #groupbar .group-new-input{min-height:26px;padding:1px 8px;font-size:12px;min-width:110px;
   background:var(--dock-input,#12161d);color:inherit;border:1px solid var(--dock-accent,#3b82f6);border-radius:6px;outline:none}
 
 /* 可折叠分组：每个分组是一个 <details>，组头是标签样式（参考 cost-meter 的「今日」折叠） */
@@ -81,42 +81,42 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
 .stash-tag-count{opacity:.65;font-weight:400}
 .stash-tag-del{margin-left:auto;flex:none;opacity:.55;padding:0 4px;font-size:13px;line-height:1;cursor:pointer}
 /* 当前正在筛选的标签（state.view 指向的组）高亮 */
-.stash-group>.stash-tag.active{color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent)}
-.stash-group>.stash-tag.active>.stash-tag-dot{background:#1a1035}
+.stash-group>.stash-tag.active{color:var(--dock-accent-ink);background:var(--dock-accent);border-color:var(--dock-accent)}
+.stash-group>.stash-tag.active>.stash-tag-dot{background:var(--dock-accent-ink)}
 .stash-group>.stash-tag.active>.stash-tag-count{opacity:.8}
-.stash-group>.stash-tag.active>.stash-tag-del{color:#1a1035;opacity:.75}
+.stash-group>.stash-tag.active>.stash-tag-del{color:var(--dock-accent-ink);opacity:.75}
 .stash-group>.stash-tag.active>.stash-tag-del:hover{color:#7a1010}
 /* 拖动文件悬停到某个分组标签上：高亮该分组名，提示松手即落入此分组 */
 .stash-group>.stash-tag.drop-hover{
-  color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent);
+  color:var(--dock-accent-ink);background:var(--dock-accent);border-color:var(--dock-accent);
   box-shadow:0 0 0 2px color-mix(in srgb,var(--dock-accent) 40%,transparent);
 }
-.stash-group>.stash-tag.drop-hover>.stash-tag-dot{background:#1a1035}
+.stash-group>.stash-tag.drop-hover>.stash-tag-dot{background:var(--dock-accent-ink)}
 .stash-group>.stash-tag.drop-hover>.stash-tag-count{opacity:.85}
-.stash-group>.stash-tag.drop-hover>.stash-tag-del{color:#1a1035;opacity:.75}
+.stash-group>.stash-tag.drop-hover>.stash-tag-del{color:var(--dock-accent-ink);opacity:.75}
 /* 右侧文件列表：已在暂存/分组里的文件 */
 .filelist .row.stashed .nm{color:var(--dock-accent)}
-.stash-badge{flex:none;font-size:10px;line-height:1;padding:2px 6px;border-radius:999px;
+.stash-badge{flex:none;font-size:11px;line-height:1;padding:2px 6px;border-radius:999px;
   background:color-mix(in srgb,var(--dock-accent) 22%,transparent);color:var(--dock-accent);
   border:1px solid color-mix(in srgb,var(--dock-accent) 45%,transparent);white-space:nowrap;max-width:9em;overflow:hidden;text-overflow:ellipsis}
 .stash-tag-del:hover{opacity:1;color:#ff5f57}
 /* 标签内「只看本组 / 看全部」按钮：文字标签，带边框，保证一眼能读懂 */
-.stash-tag-filter{flex:none;padding:1px 8px;font-size:11px;line-height:1.5;cursor:pointer;border-radius:999px;
+.stash-tag-filter{flex:none;padding:1px 8px;font-size:12px;line-height:1.5;cursor:pointer;border-radius:999px;
   border:1px solid color-mix(in srgb,var(--dock-line) 90%,transparent);color:var(--dock-muted);background:transparent}
 .stash-tag-filter:hover{color:var(--dock-text);border-color:var(--dock-accent)}
-.stash-tag-filter.on{color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent);font-weight:700}
+.stash-tag-filter.on{color:var(--dock-accent-ink);background:var(--dock-accent);border-color:var(--dock-accent);font-weight:700}
 /* 标签内「全选 / 取消」按钮：与「只看」同款胶囊，全选态高亮，多组各自独立 */
-.stash-tag-select{flex:none;padding:1px 8px;font-size:11px;line-height:1.5;cursor:pointer;border-radius:999px;
+.stash-tag-select{flex:none;padding:1px 8px;font-size:12px;line-height:1.5;cursor:pointer;border-radius:999px;
   border:1px solid color-mix(in srgb,var(--dock-line) 90%,transparent);color:var(--dock-muted);background:transparent}
 .stash-tag-select:hover{color:var(--dock-text);border-color:var(--dock-accent)}
-.stash-tag-select.all{color:#1a1035;background:var(--dock-accent);border-color:var(--dock-accent);font-weight:700}
-.stash-group>.stash-tag.active>.stash-tag-select{color:#1a1035;border-color:color-mix(in srgb,#1a1035 45%,transparent);background:transparent}
-.stash-group>.stash-tag.active>.stash-tag-select.all{background:#1a1035;color:var(--dock-accent);border-color:#1a1035}
-.stash-group-empty{margin:6px 8px 10px;color:var(--dock-muted);font-size:11.5px}
+.stash-tag-select.all{color:var(--dock-accent-ink);background:var(--dock-accent);border-color:var(--dock-accent);font-weight:700}
+.stash-group>.stash-tag.active>.stash-tag-select{color:var(--dock-accent-ink);border-color:color-mix(in srgb,var(--dock-accent-ink) 45%,transparent);background:transparent}
+.stash-group>.stash-tag.active>.stash-tag-select.all{background:var(--dock-accent-ink);color:var(--dock-accent);border-color:var(--dock-accent-ink)}
+.stash-group-empty{margin:6px 8px 10px;color:var(--dock-muted);font-size:12px}
 #stash-col #stash{padding:8px;margin:0;overflow:hidden;min-height:0;border:1px solid var(--dock-line);border-radius:12px;background:var(--dock-bg);display:flex;flex-direction:column;gap:6px;position:relative}
 #stash-col #stash>#list{flex:1 1 auto;min-height:0;overflow:auto;padding:0}
 #stash-col #list{min-height:120px}
-#stash-col #foot{margin:0;font-size:11.5px}
+#stash-col #foot{margin:0;font-size:12px}
 #stash-col #foot:empty{display:none}
 
 /* ---- 右：预览区（内含 page.css 的 .workspace 双栏） ---- */
@@ -156,28 +156,28 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
    必须把行模板同步扩到 5 行，否则 list/foot 会被挤进自动行导致整个左栏塌陷。 */
 #browse{grid-template-rows:auto auto auto minmax(0,1fr) auto}
 .browse-tools{display:flex;justify-content:flex-end;gap:6px;margin:0;flex:none}
-.browse-tools .tiny{font:600 11px/1 inherit;font-family:inherit;padding:2px 9px;border-radius:999px;
+.browse-tools .tiny{font:600 12px/1 inherit;font-family:inherit;min-height:26px;padding:2px 9px;border-radius:999px;
   border:1px solid var(--dock-line);background:transparent;color:var(--dock-muted);cursor:pointer;opacity:.75}
 .browse-tools .tiny:hover{opacity:1;color:var(--dock-fg)}
 .browse-tools .tiny.on{background:color-mix(in srgb,var(--dock-accent) 16%,transparent);
   border-color:var(--dock-accent);color:var(--dock-fg);opacity:1}
 .browse-head{display:grid;grid-template-columns:20px 26px minmax(0,1fr) 58px 62px 96px;gap:0 6px;
-  align-items:center;padding:3px 8px 2px;margin:0 0 1px;flex:none;font-size:11px;color:var(--dock-muted);
+  align-items:center;padding:3px 8px 2px;margin:0 0 1px;flex:none;font-size:12px;color:var(--dock-muted);
   border-bottom:1px solid var(--dock-line)}
 .browse-head[hidden]{display:none}
 .browse-head button{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;
   cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .browse-head button:hover{color:var(--dock-fg)}
 .browse-head button.on{color:var(--dock-fg);font-weight:600}
-.browse-head button.on[data-dir=asc]::after{content:' ▲';font-size:9px;opacity:.8}
-.browse-head button.on[data-dir=desc]::after{content:' ▼';font-size:9px;opacity:.8}
+.browse-head button.on[data-dir=asc]::after{content:'▲';font-size:12px;opacity:.8;margin-left:4px}
+.browse-head button.on[data-dir=desc]::after{content:'▼';font-size:12px;opacity:.8;margin-left:4px}
 .browse-head button:nth-child(3){text-align:left}
 .browse-head button:nth-child(6){text-align:right}
 
 .filelist .row .nm{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
 .filelist .row .nm .nmt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .filelist .row .nm .stash-badge{flex:none}
-.filelist .row .st{color:var(--dock-muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filelist .row .st{color:var(--dock-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .filelist .row .sz{text-align:right}
 .filelist .row .dt{max-width:9.5em;overflow:hidden;text-overflow:ellipsis}
 .row .add{
@@ -196,16 +196,16 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
 
 /* ---- 互关联②:暂存列表项的「预览」按钮 ---- */
 .stash-preview-btn{
-  flex:none;font:600 11px/1 inherit;font-family:inherit;padding:3px 9px;border:1px solid var(--dock-line);
+  flex:none;font:600 12px/1 inherit;font-family:inherit;min-height:26px;padding:3px 9px;border:1px solid var(--dock-line);
   border-radius:999px;color:var(--dock-muted);cursor:pointer;white-space:nowrap;
   opacity:0;transition:opacity .12s,background .12s,color .12s;
 }
 #list .row:hover .stash-preview-btn,#list .row:focus-within .stash-preview-btn{opacity:1}
 #list .row.selected .stash-preview-btn{color:var(--dock-accent);border-color:color-mix(in srgb,var(--dock-accent) 55%,transparent);opacity:1}
-.stash-preview-btn:hover,.stash-preview-btn:focus-visible{background:var(--dock-accent);border-color:var(--dock-accent);color:#1a1035;outline:none}
+.stash-preview-btn:hover,.stash-preview-btn:focus-visible{background:var(--dock-accent);border-color:var(--dock-accent);color:var(--dock-accent-ink);outline:none}
 
 /* ---- 常用文件夹 ---- */
-#fav-open{font-size:14px;min-width:26px;padding:0}
+#fav-open{font-size:14px;min-width:28px;min-height:28px;padding:2px 8px;line-height:1}
 .fav-pop{
   position:absolute;top:100%;right:0;z-index:100;
   min-width:260px;max-width:360px;max-height:360px;overflow-y:auto;
@@ -214,7 +214,7 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
   padding:6px;margin-top:4px;
 }
 .fav-section:not(:last-child){border-bottom:1px solid var(--dock-line);margin-bottom:4px;padding-bottom:4px}
-.fav-label{font-size:10.5px;color:var(--dock-muted);text-transform:uppercase;letter-spacing:.5px;padding:4px 8px 2px}
+.fav-label{font-size:11px;color:var(--dock-muted);text-transform:uppercase;letter-spacing:.5px;padding:4px 8px 2px}
 .fav-item{
   display:flex;align-items:center;gap:6px;
   width:100%;min-height:30px;padding:4px 8px;
@@ -224,7 +224,7 @@ body[data-resizing=true]{user-select:none;cursor:col-resize}
 }
 .fav-item:hover{background:var(--dock-control)}
 .fav-item .fav-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fav-item .fav-pin{flex:none;font-size:11px;color:var(--dock-accent);opacity:.7}
+.fav-item .fav-pin{flex:none;font-size:12px;color:var(--dock-accent);opacity:.7}
 .fav-item .fav-del{flex:none;font-size:14px;color:var(--dock-muted);opacity:0;padding:0 2px;line-height:1}
 .fav-item:hover .fav-del{opacity:.7}
 .fav-item .fav-del:hover{opacity:1;color:var(--dock-accent)}
@@ -266,7 +266,7 @@ body[data-dragging=true]{user-select:none;cursor:grabbing}
 .drag-ghost{
   position:fixed;z-index:70;pointer-events:none;
   padding:3px 9px;border-radius:999px;font-size:12px;line-height:1.5;
-  background:var(--dock-accent);color:#1a1035;font-weight:600;
+  background:var(--dock-accent);color:var(--dock-accent-ink);font-weight:600;
   box-shadow:0 6px 18px rgba(0,0,0,.45);
 }
 

@@ -180,31 +180,36 @@ async function scanRoot(root, needle, deadline, budget) {
   const results = []
   let scanned = 0
   let truncated = false
-  const stack = [{ dir: root.path, depth: 0 }]
-  while (stack.length) {
+  // 广度并发：每一层所有目录并发 readdir（分块限并发），比逐个目录 await 快得多。
+  // 命中项只记路径，不在这里 stat（延迟到最终结果，见 searchFiles），避免命中多时成千上万次串行 stat。
+  let queue = [{ dir: root.path, depth: 0 }]
+  const CHUNK = 256
+  while (queue.length) {
     if (scanned >= budget || Date.now() > deadline) { truncated = true; break }
-    const cur = stack.pop()
-    let ents
-    try { ents = await fs.promises.readdir(cur.dir, { withFileTypes: true }) } catch { continue }
-    for (const e of ents) {
+    const next = []
+    for (let i = 0; i < queue.length; i += CHUNK) {
       if (scanned >= budget || Date.now() > deadline) { truncated = true; break }
-      const name = e.name
-      if (!name || name.startsWith('.')) continue
-      if (e.isSymbolicLink && e.isSymbolicLink()) continue
-      const isDir = e.isDirectory()
-      if (isDir && SEARCH_HIDDEN.has(name)) continue
-      const full = path.join(cur.dir, name)
-      scanned++
-      if (!isDir) {
-        if (name.toLowerCase().includes(needle)) {
-          let size = 0, mtime = 0
-          try { const s = await fs.promises.stat(full); size = s.size; mtime = s.mtimeMs } catch { /* 用 0 兜底 */ }
-          results.push({ name, path: full, dir: cur.dir, root: root.label, size, mtime })
+      const chunk = queue.slice(i, i + CHUNK)
+      const lists = await Promise.all(chunk.map(c =>
+        fs.promises.readdir(c.dir, { withFileTypes: true }).then(es => ({ c, es })).catch(() => null)))
+      for (const it of lists) {
+        if (!it) continue
+        for (const e of it.es) {
+          if (scanned >= budget || Date.now() > deadline) { truncated = true; break }
+          const name = e.name
+          if (!name || name.startsWith('.')) continue
+          if (e.isSymbolicLink && e.isSymbolicLink()) continue
+          const full = path.join(it.c.dir, name)
+          scanned++
+          if (e.isDirectory()) {
+            if (!SEARCH_HIDDEN.has(name) && it.c.depth < MAX_DEPTH) next.push({ dir: full, depth: it.c.depth + 1 })
+          } else if (name.toLowerCase().includes(needle)) {
+            results.push({ name, path: full, dir: it.c.dir, root: root.label, size: 0, mtime: 0 })
+          }
         }
-      } else if (cur.depth < MAX_DEPTH) {
-        stack.push({ dir: full, depth: cur.depth + 1 })
       }
     }
+    queue = next
   }
   return { results, scanned, truncated }
 }
@@ -231,14 +236,25 @@ async function searchFiles(query, list) {
       if (all.length >= MAX_SCAN_TOTAL) { truncated = true; break }
     }
   }
+  // 先按"完全匹配优先、名字短优先"排序，取前 MAX_RESULTS 条；只对这些最终结果 stat 取大小/时间（并发），
+  // 避免命中成千上万时对每一条都串行 stat（这是原实现最大的慢点）。
   all.sort((a, b) => {
+    const ea = a.name.toLowerCase() === needle ? 1 : 0
+    const eb = b.name.toLowerCase() === needle ? 1 : 0
+    if (ea !== eb) return eb - ea
+    return a.name.length - b.name.length
+  })
+  if (all.length > MAX_RESULTS) { truncated = true }
+  const results = all.slice(0, MAX_RESULTS)
+  await Promise.all(results.map(async it => {
+    try { const s = await fs.promises.stat(it.path); it.size = s.size; it.mtime = s.mtimeMs } catch { /* 0 兜底 */ }
+  }))
+  results.sort((a, b) => {
     const ea = a.name.toLowerCase() === needle ? 1 : 0
     const eb = b.name.toLowerCase() === needle ? 1 : 0
     if (ea !== eb) return eb - ea
     return (b.mtime || 0) - (a.mtime || 0)
   })
-  if (all.length > MAX_RESULTS) { truncated = true }
-  const results = all.slice(0, MAX_RESULTS)
   return { query: raw, results, scanned, dirs: 0, truncated, timedOut: Date.now() > deadline, total: all.length }
 }
 
