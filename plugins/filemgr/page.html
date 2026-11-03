@@ -26,6 +26,7 @@
     <section id="stash-col" aria-label="文件暂存">
       <h2 class="fm-col-title">文件暂存</h2>
       <nav class="toolbar stash-toolbar" aria-label="暂存操作">
+        <button id="btn-add-files" title="添加文件（弹出系统文件选择窗口）">添加文件</button>
         <button id="btn-copy-path" title="复制选中项的完整路径">复制路径</button>
         <button id="btn-copy-file" title="把选中项复制为文件（可粘贴到资源管理器）">复制为文件</button>
         <button id="btn-remove" title="从暂存移除选中项">移除</button>
@@ -96,7 +97,7 @@
         <h2>手动输入路径</h2>
         <form id="jump-form">
           <label>文件夹绝对路径
-            <input id="jump-input" placeholder="F:\AI REP" autocomplete="off" spellcheck="false">
+            <input id="jump-input" placeholder="例如 C:\Users\Public" autocomplete="off" spellcheck="false">
           </label>
           <div class="actions">
             <button type="submit" class="primary">打开</button>

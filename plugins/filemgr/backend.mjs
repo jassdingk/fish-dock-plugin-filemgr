@@ -409,7 +409,16 @@ createPlugin({
     stash.init(() => { setImmediate(() => saveStashConfig()) })
     stash.loadFrom(config.stash)
   },
-  deactivate: async () => { await saveConfig() },
+  deactivate: async () => {
+    // 宿主停用/退出插件时清理后台资源，避免遗留 HTTP 拖出服务或选择对话框的脏状态。
+    try { stash.closeDragOut() } catch { /* 没有活跃拖出服务时忽略 */ }
+    picking.active = false
+    picking.picked = null
+    stashPicking.active = false
+    stashPicking.picked = null
+    stashPicking.paths = null
+    await saveConfig()
+  },
   // 协议层出错只记日志，绝不设置退出码：exitCode 非 0 会让宿主直接判定插件异常退出，
   // 而 close() 之后事件循环本来就空，插件就再也起不来（页面显示“插件尚未运行”）。
   onError: error => logCrash('onError', error),

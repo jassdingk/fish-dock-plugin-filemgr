@@ -119,7 +119,25 @@
     bad('')
     try { await fn(...args) }
     catch (error) { bad(error && error.message ? error.message : String(error)) }
-    finally { state.busy = false }
+    finally {
+      state.busy = false
+      // 「上一级」连点：忙的时候先把点击记下来，忙完再退一级，避免连续点击被吞掉。
+      if (navPending > 0) { navPending--; if (upTarget()) goUp() }
+    }
+  }
+
+  // 「上一级」的统一目标：双栏时以左栏目录为准；单栏文件视图里回到文件所在目录。
+  // 顶部 #up 与浏览区底部 #browse-up 共用这一套，保证两个按钮指向一致。
+  let navPending = 0
+  const upTarget = () => (state.layout === 'double'
+    ? (state.parent || null)
+    : (state.file ? dirOf(state.file.path) : (state.parent || null)))
+  const goUp = () => {
+    const target = upTarget()
+    if (!target) { navPending = 0; return }
+    // busy 时不直接丢弃，而是排队（一次退一级），连续点击就是连续退多级。
+    if (state.busy) { navPending++; return }
+    guard(() => openDir(target))()
   }
 
   // ---------------------------------------------------------------- 侧栏
@@ -235,7 +253,7 @@
         }
       }
     }
-    $('browse-up').disabled = !state.parent && !state.file
+    $('browse-up').disabled = !upTarget()
   }
 
   // 把上栏高度写进 CSS 变量 --side-h。只有双栏时 .workspace 会用它，
@@ -1257,7 +1275,7 @@
 
   $('refresh').onclick = guard(() => state.file ? openFile(state.file.path) : (state.path ? openDir(state.path) : boot()))
   $('browse-refresh').onclick = guard(() => state.path ? openDir(state.path) : null)
-  $('browse-up').onclick = guard(() => state.parent ? openDir(state.parent) : null)
+  $('browse-up').onclick = () => goUp()
   // 隐藏项开关 + 表头排序（点同一列切换升降序）
   $('browse-hidden').onclick = () => { state.showHidden = !state.showHidden; drawBrowse() }
   for (const btn of $('browse-head').querySelectorAll('button[data-sort]')) {
@@ -1270,10 +1288,7 @@
   }
   // 「上一级」：双栏时左栏才是目录浏览的主体，应该以左栏当前位置为准；
   // 单栏时页面已经被文件视图占据，只能用文件所在目录回退。
-  $('up').onclick = guard(() => {
-    if (state.layout === 'double') return state.parent ? openDir(state.parent) : null
-    return state.file ? openDir(dirOf(state.file.path)) : (state.parent ? openDir(state.parent) : null)
-  })
+  $('up').onclick = () => goUp()
   $('recent-clear').onclick = guard(async () => { const row = await call('preview.forget'); state.recent = row.recent; drawSide() })
   $('open').onclick = guard(() => openNativeFolder(false))
   $('pick-native').onclick = guard(async () => { await openNativeFolder(true); drawSide() })
@@ -1412,7 +1427,7 @@
     drawSide()
     updatePinBtn()
     // 打开上次浏览过的文件夹（持久化在 prefs.json 的 recent[0]），重启/重载后仍回到上次位置；
-    // 没有最近记录时再回落到默认 home（F:\AI REP）。
+    // 没有最近记录时回落到默认 home（后端返回的第一个根 = 用户目录），不写死本机路径。
     const last = state.recent[0] || state.home || state.roots[0]?.path || ''
     if (last) await openDir(last)
     else { clear($('view')).append(el('p', { class: 'note', text: '没有可访问的根目录。' })); say('就绪') }
@@ -1754,6 +1769,7 @@
     if (added) { say(`已加入 ${added} 项`); await refresh() }
   }
 
+  $('btn-add-files').onclick = guard(pickFilesToStash)
   $('btn-copy-path').onclick = guard(async () => {
     const items = selectedItems()
     await call('stash.copy', { mode: 'path', ids: items.map(i => i.id) })
@@ -1851,6 +1867,24 @@
   // 批量加入（框选后拖进暂存区走这一条）。
   // 后端 stash.add 本来就吃 paths 数组，所以只是把多行一次性递过去；
   // 逐个报告"加了几项/几项重复"，比只弹一个含糊的 toast 更好懂。
+  // 通过系统「选择文件」对话框往暂存区添加文件：后端 pick-files.ps1 弹窗，这里轮询结果。
+  async function pickFilesToStash() {
+    const first = await call('stash.pickFiles', { title: '添加文件' })
+    if (first && first.error) throw new Error(first.error)
+    let done = null
+    for (let i = 0; i < 900; i++) {           // 最长等 ~10 分钟，够用户慢慢翻
+      await new Promise(r => setTimeout(r, 700))
+      const row = await call('stash.pickResult')
+      if (row && row.error) throw new Error(row.error)
+      if (!row || row.pending) continue
+      done = row
+      break
+    }
+    if (!done || done.cancelled) return
+    const paths = done.paths || []
+    if (paths.length) await addManyToStash(paths)
+  }
+
   async function addManyToStash(paths, group) {
     const list = (paths || []).filter(Boolean)
     if (!list.length) return

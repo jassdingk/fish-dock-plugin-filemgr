@@ -2,7 +2,7 @@
 // 所有方法签名返回普通对象 {ok:true,...} 或抛出 Error，由 backend.mjs 的 guard() 包装。
 
 import { createHash } from 'node:crypto';
-import { statSync, existsSync, readFileSync } from 'node:fs';
+import { statSync, existsSync, readFileSync, createReadStream } from 'node:fs';
 import { basename, resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
@@ -287,9 +287,11 @@ function copy(ids, asType) {
 }
 
 function copyText(texts) {
-  const safe = JSON.stringify(texts.join('\n'));
-  const ps = `[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetText(${safe})`;
-  execFile('powershell', ['-NoProfile', '-Command', ps], {
+  // 用 base64 传文本 + -EncodedCommand：用户可控的文件名/路径绝不拼进 PowerShell 脚本，防命令注入。
+  const b64 = Buffer.from(texts.join('\n'), 'utf8').toString('base64');
+  const ps = `Add-Type -AssemblyName System.Windows.Forms; $t=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}')); [System.Windows.Forms.Clipboard]::SetText($t)`;
+  const encoded = Buffer.from(ps, 'utf16le').toString('base64');
+  execFile('powershell', ['-NoProfile', '-EncodedCommand', encoded], {
     detached: true,
     stdio: 'ignore',
   }).unref();
@@ -331,19 +333,16 @@ function dragOut(ids) {
       if (!filePath) {
         res.writeHead(403); res.end('Forbidden'); return;
       }
-      // 路径白名单校验：禁止 ../ 穿越
-      const resolved = resolve(filePath);
-      if (!resolved.startsWith(resolve(filePath, '..', '..'))) {
-        // 只能在文件所在父目录内（简单校验）
-      }
-      const buf = readFileSync(filePath);
+      // 路径来自 allowed Map（stash.add 时登记），不含用户拼接输入，直接使用。
+      const st = statSync(filePath);
       res.writeHead(200, {
         'Content-Type': guessMime(filePath),
-        'Content-Length': buf.length,
+        'Content-Length': st.size,
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'no-cache',
       });
-      res.end(buf);
+      // 流式发送：大文件不整块读进内存。
+      createReadStream(filePath).pipe(res);
     } catch {
       if (!res.headersSent) { res.writeHead(500); res.end('Internal Error'); }
     }

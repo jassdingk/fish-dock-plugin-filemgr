@@ -99,7 +99,7 @@ function windowsDrives() {
   return out
 }
 
-// 打开文件夹时的默认起始位置；存在的排在最前，成为首页默认目录。
+// 本机偏好目录（仅作快捷入口，排在盘符之后；换机器时这里不存在会被自动跳过）。
 const PREFERRED = ['F:\\AI REP']
 
 export function roots(extra = []) {
@@ -115,12 +115,15 @@ export function roots(extra = []) {
     seen.add(key)
     list.push({ label, path: abs })
   }
-  for (const dir of PREFERRED) push(dir, dir)
-  for (const d of windowsDrives()) push(d.label, d.path)
+  // 顺序：用户目录/桌面/文档/下载 排最前 —— 任何 Windows 机器都有，首页就落在用户目录；
+  // 盘符其次；本机偏好目录和用户手动添加的文件夹最后。
+  // 以前 PREFERRED 排第一，换一台机器（没有 F:\AI REP）时首页会退到第一个盘符 = C:\ 根目录。
   push('用户目录', os.homedir())
   push('桌面', path.join(os.homedir(), 'Desktop'))
   push('文档', path.join(os.homedir(), 'Documents'))
   push('下载', path.join(os.homedir(), 'Downloads'))
+  for (const d of windowsDrives()) push(d.label, d.path)
+  for (const dir of PREFERRED) push(dir, dir)
   for (const dir of extra) push(dir, dir)
   return list
 }
@@ -139,7 +142,10 @@ export function resolveSafe(input, list) {
   const raw = input.trim()
   if (!raw) throw new Error('路径为空')
   if (raw.startsWith('\\\\')) throw new Error('不支持 UNC 路径')
-  const abs = path.resolve(raw)
+  let abs = path.resolve(raw)
+  // 先解析符号链接再校验，防止「允许根内的 symlink 指向根外」绕过；
+  // 解析失败（路径不存在/权限不足）时退回原路径，保持原有兼容性。
+  try { abs = fs.realpathSync(abs) } catch { /* 按原路径校验 */ }
   if (!insideRoot(abs, list)) throw new Error('该路径不在允许的根目录内：' + abs)
   return abs
 }
@@ -148,6 +154,7 @@ export function resolveSafe(input, list) {
 
 export function readZip(abs) {
   const buf = fs.readFileSync(abs)
+  if (buf.length > 128 * 1024 * 1024) throw new Error('zip 超过 128 MB，请用系统程序打开')
   let eocd = -1
   const from = Math.max(0, buf.length - 65558)
   for (let i = buf.length - 22; i >= from; i--) {
@@ -370,8 +377,10 @@ export async function tree(input, list) {
     return a.name.localeCompare(b.name, 'zh-CN', { numeric: true })
   })
   const parent = path.dirname(abs)
-  const atRoot = list.some(r => path.resolve(r.path).toLowerCase() === abs.toLowerCase())
-  return { path: abs, parent: parent === abs || atRoot ? null : parent, entries, truncated: limited, total: dirents.length }
+  // 只有到盘符根（dirname 等于自己）才没有上一级。不能在「列表里的某个根」处停住——
+  // 用户目录/桌面/下载/F:\AI REP/添加的文件夹只是快捷入口，不是文件系统的上界；
+  // 以前在这里返回 null，浏览到这些目录后「上一级」就卡死（看起来像返回两级就停）。
+  return { path: abs, parent: parent === abs ? null : parent, entries, truncated: limited, total: dirents.length }
 }
 
 export async function meta(input, list) {
