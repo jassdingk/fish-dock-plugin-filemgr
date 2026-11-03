@@ -1,7 +1,7 @@
 /* 文件管理页：外层三栏（暂存 | 分隔条 | 预览），内层复用 page.css 的文件夹/预览双栏。
    两条硬规矩沿用 page.css：高度用固定 px 不写 vh；main 总高钉死，避免上报高度抖动。 */
-body[data-layout=double]{height:820px}
-body.fm-layout, main.fm{height:820px;display:flex;flex-direction:column;padding:0}
+body[data-layout=double]{height:900px}
+body.fm-layout, main.fm{height:900px;display:flex;flex-direction:column;padding:0}
 
 .fm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 8px 8px;flex:none;flex-wrap:wrap}
 .fm-head .identity{display:flex;align-items:baseline;gap:10px;min-width:0}

@@ -39,7 +39,7 @@
   }
 
   const state = {
-    roots: [], recent: [], layout: 'single', home: '',
+    roots: [], recent: [], layout: 'double', home: '',
     path: null, parent: null, entries: [],
     file: null, kind: '', busy: false,
     // 左栏宽度（px）。拖动分栏分隔条时改它，松手才上报给后端持久化。
@@ -126,12 +126,10 @@
     }
   }
 
-  // 「上一级」的统一目标：双栏时以左栏目录为准；单栏文件视图里回到文件所在目录。
+  // 「上一级」的统一目标：固定双栏布局，以左栏目录为准。
   // 顶部 #up 与浏览区底部 #browse-up 共用这一套，保证两个按钮指向一致。
   let navPending = 0
-  const upTarget = () => (state.layout === 'double'
-    ? (state.parent || null)
-    : (state.file ? dirOf(state.file.path) : (state.parent || null)))
+  const upTarget = () => (state.parent || null)
   const goUp = () => {
     const target = upTarget()
     if (!target) { navPending = 0; return }
@@ -1485,9 +1483,8 @@
   }
 
   const reportHeight = () => {
-    // 必须按真实布局上报：宿主 onLayout 只有在 layout==='double' 时才会把扩展页
-    // 放宽（EXT_WIDE_W=1280）。原来写死 'single'，导致无论页面怎么排都按窄宽度渲染。
-    const layout = state.layout === 'double' ? 'double' : 'single'
+    // 固定双栏：宿主 onLayout 只有 layout==='double' 才会把扩展页放宽（EXT_WIDE_W=1280）。
+    const layout = 'double'
     try { parent.postMessage({ type: 'fish:layout', height: document.documentElement.scrollHeight, layout }, '*') } catch { /* 宿主不可用时忽略 */ }
   }
 

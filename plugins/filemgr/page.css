@@ -2,9 +2,6 @@
 #app-main, main{min-width:0}
 header{flex-wrap:wrap}
 header nav{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.layouts{border-radius:999px;background:var(--dock-card);padding:3px;gap:2px}
-.layouts button{border:0;background:transparent;min-height:24px;padding:2px 12px}
-.layouts button[aria-pressed=true]{background:var(--dock-line);color:var(--dock-text)}
 
 .workspace{display:grid;gap:12px;align-items:start;grid-template-columns:minmax(0,1fr)}
 /* 双栏：左文件夹 / 右预览。
@@ -13,7 +10,7 @@ header nav{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       再用 vh 就是「高度依赖视口、视口依赖上报高度」的死循环，面板会一直抖。
    2) main 的总高也钉死（见下方 body[data-layout=double] main），窄屏 header 换行时
       由 workspace 让位，总高恒定 —— 上报值稳定，宿主只量一次。 */
-body[data-layout=double] main{display:flex;flex-direction:column;height:820px}
+body[data-layout=double] main{display:flex;flex-direction:column;height:900px}
 /* 三行：上栏（文件夹） | 分隔条 | 下栏（预览）。上栏高度由 --side-h 控制，拖动分隔条就是改这个变量。 */
 body[data-layout=double] .workspace{
   flex:1 1 auto;
@@ -33,8 +30,6 @@ body[data-layout=double] #split{display:block}
 #split[data-dragging=true]{background:var(--dock-control)}
 /* 拖动期间锁住文字选中，否则会拖出一片蓝色选区。 */
 body[data-resizing=true]{user-select:none;cursor:row-resize}
-body[data-layout=single] #side{display:none}
-body[data-layout=single] #browse{display:none}
 
 #side{margin:0;padding:12px;display:grid;gap:10px;grid-template-rows:minmax(0,1fr) auto;min-height:0;overflow:hidden;border:1px solid var(--dock-line);border-radius:18px;background:var(--dock-card)}
 /* 上下并列后 #side 只有上栏那点高度（默认 360px），「位置/最近」面板在里面会
