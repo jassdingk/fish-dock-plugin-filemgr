@@ -553,6 +553,22 @@ createPlugin({
 
     'stash.list': guard(async () => stash.list()),
 
+    // 供“子灵动岛/桌面快捷区”使用的精简汇总：只回 count + name 等展示字段，
+    // 上限/去重/排序等规则留在插件侧，宿主不用关心。
+    'stash.summary': guard(async params => {
+      const r = stash.list() || {}
+      const all = Array.isArray(r.items) ? r.items : []
+      const max = Math.max(1, Math.min(500, (params && params.max) || 200))
+      const items = all.slice(0, max).map(it => ({
+        id: it.id,
+        name: it.name,
+        kind: it.kind,
+        group: it.group,
+        missing: !!it.missing,
+      }))
+      return { count: all.length, shown: items.length, items }
+    }),
+
     'stash.add': guard(async params => {
       if (!Array.isArray(params.paths) || params.paths.length === 0) throw new Error('paths is required')
       return stash.add(params.paths, params.group)
