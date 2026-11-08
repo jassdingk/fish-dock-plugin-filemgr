@@ -408,6 +408,15 @@ createPlugin({
     const config = await loadConfig()
     stash.init(() => { setImmediate(() => saveStashConfig()) })
     stash.loadFrom(config.stash)
+    // 2.2.0：订阅主 Dock 拖入；真正打开子岛窗口在 onEvent 收到 drop 时才做（宿主不自动开、无常驻小球）。
+    try { await ctx.fileDrop.subscribe('dock', 'stash') } catch (_) { /* 旧宿主无此能力则忽略 */ }
+  },
+  // 2.2.0：收到主 Dock 的文件拖入 → 加入暂存 + 打开插件自己的子岛窗口。
+  onEvent: async (ev, ctx) => {
+    if (ev && ev.event === 'fileDrop' && ev.phase === 'drop' && Array.isArray(ev.paths) && ev.paths.length) {
+      try { await stash.add(ev.paths) } catch (_) {}
+      try { await ctx.windows.open({ key: 'stash', page: 'stash', title: '文件暂存', anchor: 'dock-left', width: 240, height: 64, transparent: true }) } catch (_) {}
+    }
   },
   deactivate: async () => {
     // 宿主停用/退出插件时清理后台资源，避免遗留 HTTP 拖出服务或选择对话框的脏状态。
