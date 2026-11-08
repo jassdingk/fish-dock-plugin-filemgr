@@ -67,17 +67,13 @@ function stage(out) {
     schema: 1,
     id: PLUGIN.id,
     name: PLUGIN.name,
-    version: '1.0.12',
+    version: '1.0.13',
     hostApi: 1,
     platforms: ['windows-x86_64'],
     storage: { directory: PLUGIN.directory, dataSchema: 1 },
     backend: { runtime: 'node', entry: `plugins/${PLUGIN.key}/backend.mjs` },
     capabilities: PLUGIN.capabilities,
-    pages: [
-      { id: 'main', title: PLUGIN.name, entry: `plugins/${PLUGIN.key}/page.html` },
-      // 子岛「+」打开：紧凑模式，只含文件暂存 + 文件预览（同 html 结构，页面内 hide 掉目录浏览）。
-      { id: 'stash', title: '文件暂存', entry: `plugins/${PLUGIN.key}/stash.html` },
-    ],
+    pages: [{ id: 'main', title: PLUGIN.name, entry: `plugins/${PLUGIN.key}/page.html` }],
     files: manifestFiles,
   }
   const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n', 'utf8')

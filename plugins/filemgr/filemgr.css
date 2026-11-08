@@ -292,19 +292,4 @@ body[data-layout=double] #preview-col .filelist .row{grid-template-columns:20px 
   body[data-layout=double] #preview-col .filelist .row{grid-template-columns:20px 26px minmax(0,1fr);gap:0;padding:4px 7px}
 }
 
-/* ============================================================
-   子岛「+」打开的紧凑模式（stash.html → body.fm-stash-only）
-   只保留左「文件暂存」列表 + 右「文件预览」，隐藏目录浏览相关控件。
-   不影响常规文件管理页（那些页面没有 fm-stash-only 类）。
-   ============================================================ */
-body.fm-stash-only #preview-col .preview-toolbar,
-body.fm-stash-only #preview-col #search-box,
-body.fm-stash-only #preview-col #jump,
-body.fm-stash-only #preview-col #side,
-body.fm-stash-only #preview-col #crumbs,
-body.fm-stash-only #preview-col #split{ display:none !important; }
-/* 预览列内原本是「上(浏览)/8px 分隔条/下(预览)」三行，隐藏后压成单行铺满 */
-body.fm-stash-only #preview-col .workspace{ grid-template-rows:minmax(0,1fr) !important; }
-/* 顶部标题区只留标题与状态，去掉多余留白 */
-body.fm-stash-only .fm-head{ margin-bottom:6px; }
 

@@ -57,10 +57,6 @@
     browseSel: new Set(),
   }
 
-  // 子岛「+」打开的紧凑模式：只保留「文件暂存」列表 + 「文件预览」，隐藏目录浏览那一套。
-  // 由 stash.html 在加载 page.js 之前设置 window.__FM_STASH_ONLY = true。
-  const STASH_ONLY = typeof window !== 'undefined' && window.__FM_STASH_ONLY === true
-  if (STASH_ONLY) { try { document.body.classList.add('fm-stash-only') } catch { /* 忽略 */ } }
 
   // 删除文件列表里的全部子节点（视图切换时复用）。：这些目录只会在文件浏览器里制造噪声。
   const HIDDEN_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', '__pycache__', '.idea', '.vscode', 'target', 'dist', '.next', '.cache'])
@@ -2166,24 +2162,11 @@
   new ResizeObserver(reportHeight).observe(document.documentElement)
   // 两套 boot 只读数据、不互斥；不能用 guard（它会因共享 state.busy 把第二个启动挡掉）。
   const bootSafe = fn => Promise.resolve().then(fn).catch(error => bad(error && error.message ? error.message : String(error)))
-  if (STASH_ONLY) {
-    // 紧凑模式（子岛「+」进入）：不启动目录浏览，只跑暂存列表（与子岛同一后端 stash.list，打开即同步）。
-    state.layout = 'double'
-    document.body.dataset.layout = 'double'
-    wireFmSplit()
-    bootSafe(async () => {
-      await bootStash()
-      // 预览区初始给一句占位提示；点左侧「文件暂存」里的条目即在此渲染预览（绑定已在 drawList 内）。
-      const view = $('view')
-      if (view && !state.file) clear(view).append(el('p', { class: 'note', role: 'status', text: '点左侧「文件暂存」里的文件即可在此预览。' }))
-    })
-  } else {
-    wireFmSplit()
-    wireSplitter()
-    wireBrowseSelect()
-    wireSearch()
-    drawSide()
-    bootSafe(bootPreview)
-    bootSafe(bootStash)
-  }
+  wireFmSplit()
+  wireSplitter()
+  wireBrowseSelect()
+  wireSearch()
+  drawSide()
+  bootSafe(bootPreview)
+  bootSafe(bootStash)
 })()
