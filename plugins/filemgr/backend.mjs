@@ -400,6 +400,144 @@ async function saveStashConfig() {
   } catch { /* 损坏时静默跳过 */ }
 }
 
+// ── 2.3.4 子岛：单窗口多形态（#88 H6 keepAlive）──────────────────────────────
+// 小球与长条现在是**同一个外部窗口**的两种形态：切换只 windows.update 几何（带
+// duration/easing 补间），不关窗、不重开，所以拖入订阅、页面状态与句柄全程有效。
+// 旧双窗方案（球/条各开一窗 + close/open）会闪断，且订阅随旧句柄失效。
+// 位置全部声明式交给宿主：anchorBase:'capsule' 贴可见胶囊的**实时**矩形，主岛变宽、
+// 收起滑出、唤回都由宿主重排（2.3.4 H7/C3），插件不自己算坐标、不轮询。
+let winHandle = null
+let winMode = 'ball'              // 'ball' | 'bar'
+let dockStateTimer = 0            // 轮询 dock.rect() 的定时器（纯 hook 读快照，不改宿主）
+// 长条高度按内容伸缩（BAR_MIN_H–BAR_MAX_H），宽度等宽胶囊、内容多时涨到 BAR_MAX_W。
+let barHeight = 72
+let lastModeAt = 0
+const MORPH_MS = 200
+const BAR_MIN_H = 72
+const BAR_MAX_H = 320
+const BAR_MAX_W = 720
+// 球：36×36，右缘贴胶囊左缘（GAP_R=8）、垂直中心与胶囊中心对齐。
+// 实测胶囊 #island-row=(694.5,8,531,36) cy=26；球 top=8、h=36 → cy=26 对齐（offsetY:0）。
+const BALL_FRAME = { width: 36, height: 36,
+  anchor: 'dock-left', anchorBase: 'capsule', align: 'right-center', offsetX: -7, offsetY: 0 }
+// 条：等宽胶囊（maxWidth 是内容增长上限），挂胶囊正下方居中，高随内容。
+function barFrame() {
+  return { width: 'dock', maxWidth: BAR_MAX_W, height: barHeight,
+    anchor: 'dock-bottom', anchorBase: 'capsule', align: 'top-center', offsetX: 0, offsetY: 8 }
+}
+// hitTest:'opaque' + 一块覆盖整窗的矩形：视觉与可点范围不变（整窗仍可点），但宿主
+// 据此登记命中规则，才会把「点窗口外」的 dock outside 事件发给本插件（#88 H3）。
+// ⚠️ 只在**长条展开**时启用：命中规则只要存在，宿主指针线程就从 1000ms 空闲压到
+// TICK_MS=40ms 一直醒（plugin_hit::watching()），会拖慢整个 Dock（含文件管理页）。
+// 小球态用 'window'（不登记规则）→ 主循环回到空闲，零开销。
+const HIT_FULL = { hitTest: 'opaque', hitRects: [[0, 0, 2400, 2000]] }
+const HIT_NONE = { hitTest: 'window' }
+const OPEN_OPTS = { key: 'stash', page: 'stash', title: '文件暂存', ...BALL_FRAME,
+  transparent: true, zOrder: 'above-dock', ...HIT_NONE }
+
+function logWin(...args) { console.error('[filemgr]', ...args) }
+
+async function openWindow(ctx) {
+  const handle = await ctx.windows.open(OPEN_OPTS)
+  winHandle = handle
+  winMode = 'ball'
+  // 拖入订阅跟着句柄走，**只订一次**：单窗多形态下句柄不变，切换形态不需要重订。
+  try { await ctx.fileDrop.subscribe({ scope: 'window', handle }); logWin('window drop subscribe ok') }
+  catch (e) { logWin('window drop subscribe err', e && e.message) }
+  // 初始位置校正：首次开球时主岛胶囊可能刚上报、宽度还没稳定，会先摆到错的 x。
+  // 1 秒后按当前胶囊再摆**一次**（一次性对齐，之后不跟随主岛长度变化）。
+  setTimeout(() => {
+    if (winHandle === handle && winMode === 'ball') {
+      ctx.windows.update(handle, { offsetX: BALL_FRAME.offsetX, offsetY: BALL_FRAME.offsetY, duration: 0 }).catch(() => {})
+    }
+  }, 1000)
+  return handle
+}
+// 球 ↔ 条：只改几何，不关窗。duration 让宿主把尺寸与位置一起补间（#88 H2），
+// easing 展开用 ease-out-cubic、收起用 spring（带一点回弹，贴近旧产物的弹簧观感）。
+async function morph(ctx, mode) {
+  if (!winHandle || winMode === mode) return
+  const frame = mode === 'bar' ? barFrame() : BALL_FRAME
+  // 展开与收起都用 ease-out-cubic：起步快、收尾稳，没有 spring 的过冲抖动（旧实现收起用
+  // spring 会先冲过头再回弹，看着“不规范”）。200ms，比 300ms 利落。
+  // hitTest 随形态切换：条=opaque（登记命中规则，才能收 outside 点窗外事件）；
+  // 球=window（撤销规则 → 宿主指针线程回到 1000ms 空闲，不再 40ms 常醒拖慢整个 Dock）。
+  const opts = { ...frame, ...(mode === 'bar' ? HIT_FULL : HIT_NONE), duration: MORPH_MS, easing: 'ease-out-cubic' }
+  try {
+    await ctx.windows.update(winHandle, opts)
+    winMode = mode
+    lastModeAt = Date.now()
+    logWin('morph ->', mode)
+  } catch (e) { logWin('morph err', mode, e && e.message) }
+  await syncReserve(ctx)
+}
+
+// H10：长条展开时把自身矩形登记为主岛占位 → 主岛展开高度让出 h+8、命中面并入，
+// 避免长条压住主岛内容；收球即释放。rect 用主岛页面的逻辑像素（宿主按 scale 折算）。
+async function syncReserve(ctx) {
+  try {
+    if (winMode !== 'bar') { await ctx.dock.release(); return }
+    let snap = null
+    try { snap = await ctx.dock.rect() } catch (_) {}
+    const sf = snap && Number(snap.scale) > 0 ? Number(snap.scale) : 1
+    const win = snap && snap.window, cap = snap && snap.capsule
+    const rect = (win && cap)
+      ? { x: (cap.x - win.x) / sf, y: (cap.y - win.y) / sf, w: cap.width / sf, h: barHeight }
+      : { x: 0, y: 0, w: 1, h: barHeight }
+    await ctx.dock.reserve(rect)
+  } catch (e) { logWin('reserve err', e && e.message) }
+}
+
+// 主岛状态轮询（纯 hook：只读 ctx.dock.rect() 的快照，不改宿主、不依赖场景外的事件广播）。
+// 目的：主灵动岛一有变化就把子岛收起——收起/隐藏/全屏避让时**关掉小球窗口**（不再留原地），
+// 唤回时重新开球；主岛展开/设置/ask 时把长条收成小球。这就是旧产物 followBar=false 的口径。
+// ⚠️ close/open 会销毁并**重建** WebView2（几百 ms），所以加「状态稳定」防抖：
+// 同一状态连续 STABLE_TICKS 次（≈600ms）才动作，避免悬停展开/收起反复时反复重建造成卡顿。
+const STABLE_TICKS = 3
+let lastAwayKey = null
+let stableCount = 0
+let syncBusy = false      // 防重入：dock.rect/open/close 都比 250ms tick 慢，重叠会重复开窗
+let waitCapsuleAt = 0     // 等主岛胶囊上报的起点（超时后不再等）
+const CAPSULE_WAIT_MS = 2500
+async function syncDockState(ctx) {
+  if (syncBusy) return
+  syncBusy = true
+  try {
+    const snap = await ctx.dock.rect()
+    const st = snap && snap.state
+    if (!st) return
+    // 主岛只要不是「compact 且可见」，就把小球收起（close）——收起/唤醒/展开/设置/全屏避让都算。
+    const away = !!(st.hidden || st.stowed || st.fullscreen || (st.view && st.view !== 'compact'))
+    const key = away ? 'away' : 'here'
+    if (key !== lastAwayKey) { lastAwayKey = key; stableCount = 0; return }   // 状态刚变，先等稳定
+    if (stableCount < STABLE_TICKS) { stableCount++; return }                 // 未稳定，不动手
+    if (away) {
+      if (winHandle) {
+        try { await ctx.windows.close(winHandle) } catch (_) {}
+        winHandle = null; winMode = 'ball'
+        logWin('dock-state: closed ball (dock away)')
+      }
+      return
+    }
+    if (!winHandle) {
+      // 优先等主岛胶囊上报后再开球（首次就贴胶囊左缘）；但主岛可能迟迟没上报 closed_rect
+      // （页面 ready 前 pet.stow 还没发），所以最多等 CAPSULE_WAIT_MS，超时就先开，
+      // 位置交给 openWindow 里 1s 后的 update 校正——绝不无限等待，否则球永远不出现。
+      if (!snap.capsule) {
+        if (!waitCapsuleAt) waitCapsuleAt = Date.now()
+        if (Date.now() - waitCapsuleAt < CAPSULE_WAIT_MS) return
+      } else {
+        waitCapsuleAt = 0
+      }
+      try {
+        await openWindow(ctx)
+        logWin('dock-state: opened ball' + (snap.capsule ? '' : ' (fallback: no capsule yet)'))
+      } catch (_) {}
+      return
+    }
+  } catch (e) { logWin('dock-state err', e && e.message) } finally { syncBusy = false }
+}
+
 createPlugin({
   // 宿主通过 FISH_PLUGIN_ID 传入当前包声明的 id；缺省时与 plugin.json 保持一致。
   id: process.env.FISH_PLUGIN_ID || 'jassdingk.filemgr',
@@ -408,15 +546,47 @@ createPlugin({
     const config = await loadConfig()
     stash.init(() => { setImmediate(() => saveStashConfig()) })
     stash.loadFrom(config.stash)
-    // 2.2.0：订阅主 Dock 拖入；真正打开子岛窗口在 onEvent 收到 drop 时才做（宿主不自动开、无常驻小球）。
-    try { await ctx.fileDrop.subscribe('dock', 'stash') } catch (_) { /* 旧宿主无此能力则忽略 */ }
-  },
-  // 2.2.0：收到主 Dock 的文件拖入 → 加入暂存 + 打开插件自己的子岛窗口。
-  onEvent: async (ev, ctx) => {
-    if (ev && ev.event === 'fileDrop' && ev.phase === 'drop' && Array.isArray(ev.paths) && ev.paths.length) {
-      try { await stash.add(ev.paths) } catch (_) {}
-      try { await ctx.windows.open({ key: 'stash', page: 'stash', title: '文件暂存', anchor: 'dock-left', width: 240, height: 64, transparent: true }) } catch (_) {}
-    }
+    console.error('[filemgr] activate start')
+
+    // 2.2.0：订阅主 Dock 拖入（独占）。
+    try { await ctx.fileDrop.subscribe({ scope: 'dock' }); logWin('dock drop subscribe ok') } catch (e) { logWin('dock drop subscribe err', e && e.message) }
+
+    // 主岛事件放**后端**：2.3.4 的页面桥只路由 dock.windows./dock.fileDrop.，
+    // `FishDock.dock.*` 还走不到 plugin_dock（页面侧调用会掉进插件命令），
+    // 而 host.dock.* 后端桥是通的，窗口几何本来也由后端控制。
+    try {
+      if (ctx.dock && typeof ctx.dock.onEvent === 'function') {
+        await ctx.dock.onEvent(ev => {
+          if (!ev) return
+          if (ev.type === 'pointer' && ev.action === 'enter') {
+            // 悬停主岛收球。点小球展开时鼠标会擦过胶囊边界触发一次 enter，用时间窗压掉竞态。
+            if (winMode === 'bar' && Date.now() - lastModeAt > 1200) morph(ctx, 'ball')
+          } else if (ev.type === 'outside') {
+            // 点窗口外（含主岛/桌面）收起长条（#88 H3，来自 hitTest:'opaque' 的命中规则）。
+            if (winMode === 'bar') morph(ctx, 'ball')
+          }
+        })
+        logWin('dock.onEvent ok')
+      }
+    } catch (e) { logWin('dock.onEvent err', e && e.message) }
+
+    // 拖入 drop → 加入暂存并展开长条。goo 吸收动画由宿主在真实落点回放（#88 H9），
+    // 插件只负责数据；拖到长条自身时不重复 morph，只同步占位高度。
+    try {
+      if (ctx.fileDrop && typeof ctx.fileDrop.onEvent === 'function') {
+        ctx.fileDrop.onEvent(async ev => {
+          if (!ev || ev.phase !== 'drop' || !Array.isArray(ev.paths) || !ev.paths.length) return
+          if (ev.scope !== 'dock' && ev.scope !== 'window') return
+          try { await stash.add(ev.paths) } catch (_) {}
+          if (winMode !== 'bar') await morph(ctx, 'bar')
+          else await syncReserve(ctx)
+        })
+      }
+    } catch (e) { logWin('fileDrop.onEvent err', e && e.message) }
+
+    // 常驻小球：交给下面的 dock 状态轮询统一开（等胶囊上报后再开，首次位置就正确）。
+    // 每 250ms 读一次主岛快照：收起→关球、唤回→开球、展开→收球（纯 hook dock.rect）
+    dockStateTimer = setInterval(() => { syncDockState(ctx) }, 250)
   },
   deactivate: async () => {
     // 宿主停用/退出插件时清理后台资源，避免遗留 HTTP 拖出服务或选择对话框的脏状态。
@@ -426,6 +596,9 @@ createPlugin({
     stashPicking.active = false
     stashPicking.picked = null
     stashPicking.paths = null
+    winHandle = null
+    winMode = 'ball'
+    if (dockStateTimer) { clearInterval(dockStateTimer); dockStateTimer = 0 }
     await saveConfig()
   },
   // 协议层出错只记日志，绝不设置退出码：exitCode 非 0 会让宿主直接判定插件异常退出，
@@ -679,6 +852,29 @@ createPlugin({
       stashPicking.paths = null
       if (!paths) return { ...row, cancelled: true }
       return { ...row, paths }
+    }),
+
+    // 页面按钮/点击小球 → 展开长条；收起 → 收回小球（同一窗口只改几何，不关不重开）。
+    'stash.showBar': guard(async () => {
+      if (!winHandle) await openWindow(context)
+      await morph(context, 'bar')
+      return { shown: true }
+    }),
+    'stash.hideBar': guard(async () => { await morph(context, 'ball'); return { hidden: true } }),
+    // G5：打开本插件的管理页（pages[] 里 id='main'）。
+    'stash.openManager': guard(async () => { try { await context.dock.openPage('main'); return { opened: true } } catch (e) { return { opened: false, why: e && e.message } } }),
+    // 长条按内容自适应：等宽胶囊（width:'dock'）+ 按换行增高，高度顶到 BAR_MAX_H 才在条内滚动。
+    // 只改高度、不补间（内容多一行不需要动效），显式 duration:0 回到瞬时。
+    'stash.resize': guard(async params => {
+      const wantH = Number(params && params.height)
+      if (!Number.isFinite(wantH)) return { resized: false }
+      const height = Math.max(BAR_MIN_H, Math.min(BAR_MAX_H, Math.round(wantH)))
+      if (!winHandle || winMode !== 'bar' || height === barHeight) return { resized: false }
+      barHeight = height
+      try { await context.windows.update(winHandle, { height, duration: 0 }) }
+      catch (e) { return { resized: false, why: e && e.message } }
+      await syncReserve(context)
+      return { resized: true, height: barHeight }
     }),
   },
 })

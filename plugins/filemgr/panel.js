@@ -1,5 +1,6 @@
-// 文件暂存的「岛子面板」页：由插件自己渲染子岛 UI，经 bridge 独立窗口模式与宿主通信。
-// 数据走 FishDock.call('stash.*')；窗口由插件后端在收到 fileDrop 时 FishDock.windows.open 打开。
+// 文件暂存的「岛子面板」页：单窗口多形态（球↔条）。窗口几何由宿主补间，
+// 这里让 #pill 铺满窗口并按当前宽度连续改圆角 —— 视觉上小球平滑长成长条，
+// 不会出现“大透明框里一个小球”。
 ;(function () {
   const $ = s => document.querySelector(s)
   const FD = window.FishDock
@@ -22,13 +23,46 @@
   const nameOf = it => it.name || String(it.path || '').split(/[\\/]/).pop() || '文件'
   let items = []
 
+  const pill = $('#pill')
+  // 球↔条的连续过渡：宽度从 36 到 100 之间，圆角由 18(正圆) 连续降到 12(圆角条)；
+  // 100 以上完全按条渲染（chips）。阈值 100 让“计数球 → chips”切换发生在已经比较宽的阶段。
+  const BALL_MAX = 180, BALL_MIN = 36, R_BALL = 18, R_BAR = 12
+  function shape() {
+    const w = window.innerWidth || 1
+    const t = Math.max(0, Math.min(1, (BALL_MAX - w) / (BALL_MAX - BALL_MIN)))
+    pill.style.borderRadius = (R_BAR + t * (R_BALL - R_BAR)) + 'px'
+    document.body.classList.toggle('ball', w < BALL_MAX)
+  }
+
   async function refresh() {
     try { const r = await call('stash.list', {}); items = (r && r.items) || [] } catch (_) { items = [] }
-    paint()
+    paint(); measure()
   }
+
+  let lastH = 0, measureTimer = 0
+  function measure() {
+    clearTimeout(measureTimer)
+    measureTimer = setTimeout(() => {
+      if (document.body.classList.contains('ball')) return      // 球态/过渡态不报高度
+      const chips = $('#chips'), head = $('#head')
+      if (!chips) return
+      let chipsH = 0
+      if (chips.children.length) {
+        let minT = Infinity, maxB = -Infinity
+        for (const c of chips.children) {
+          const r = c.getBoundingClientRect()
+          if (r.top < minT) minT = r.top
+          if (r.bottom > maxB) maxB = r.bottom
+        }
+        chipsH = maxB - minT
+      }
+      const headH = head ? head.offsetHeight : 24
+      const h = Math.ceil(headH + 4 + chipsH + 20)
+      if (Math.abs(h - lastH) >= 6) { lastH = h; call('stash.resize', { height: h }).catch(() => {}) }
+    }, 80)
+  }
+
   function paint() {
-    const ballMode = window.innerWidth < 70
-    document.body.classList.toggle('ball', ballMode)
     const bn = $('#balln'); if (bn) bn.textContent = items.length > 99 ? '99+' : (items.length ? String(items.length) : '')
     const chips = $('#chips'); chips.replaceChildren()
     for (const it of items) {
@@ -40,28 +74,50 @@
       chip.append(ic, nm, x); chips.append(chip)
     }
     const em = $('#empty'); if (em) em.style.display = items.length ? 'none' : 'block'
+    shape()
   }
 
-  // 收起/关闭：走规范 windows.close（句柄由宿主经 ?wkey= 注入到 FishDock.windowSelf）。
-  function closeWin() {
-    try {
-      const h = (FD && FD.windowSelf) || null
-      if (FD && FD.windows && typeof FD.windows.close === 'function') FD.windows.close(h || 'stash')
-    } catch (_) {}
-  }
-  const ball = $('#ball'); if (ball) ball.addEventListener('click', () => document.body.classList.remove('ball'))
+  function closeWin() { try { if (FD && typeof FD.call === 'function') FD.call('stash.hideBar', {}) } catch (_) {} }
+
+  // 球态点整块 → 展开长条；条态点击空白不触发（只按钮响应）。
+  pill.addEventListener('click', e => {
+    if (!document.body.classList.contains('ball')) return
+    if (e.target.closest('button')) return
+    try { if (FD && typeof FD.call === 'function') FD.call('stash.showBar', {}) } catch (_) {}
+  })
+  const moreBtn = $('#more'); if (moreBtn) moreBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    try { if (FD && typeof FD.call === 'function') FD.call('stash.openManager', {}) } catch (_) {}
+  })
   const closeBtn = $('#close'); if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); closeWin() })
   const clearBtn = $('#clear'); if (clearBtn) clearBtn.addEventListener('click', async e => {
     e.stopPropagation()
     try { const ids = items.map(i => i.id); if (ids.length) await call('stash.remove', { ids }); await refresh() } catch (_) {}
   })
-  window.addEventListener('resize', paint)
-  // Esc 关闭窗口（规范：原生关闭出口之一）。
+
+  // 宿主补间会连续触发 resize：形状每帧即时更新（radius 连续），重排内容稍防抖。
+  let paintTimer = 0
+  window.addEventListener('resize', () => {
+    shape()
+    clearTimeout(paintTimer)
+    paintTimer = setTimeout(() => { paint(); measure() }, 120)
+  })
   window.addEventListener('keydown', e => { if (e.key === 'Escape') closeWin() })
   window.addEventListener('dragenter', () => document.body.classList.add('dragover'))
   window.addEventListener('dragleave', () => document.body.classList.remove('dragover'))
   document.addEventListener('dragover', e => e.preventDefault())
   document.addEventListener('drop', e => e.preventDefault())
+  if (FD && FD.fileDrop && typeof FD.fileDrop.onEvent === 'function') {
+    try {
+      FD.fileDrop.onEvent(ev => {
+        if (!ev) return
+        if (ev.phase === 'enter') document.body.classList.add('dragover')
+        else if (ev.phase === 'leave') document.body.classList.remove('dragover')
+        else if (ev.phase === 'drop') { document.body.classList.remove('dragover'); refresh() }
+      })
+    } catch (_) {}
+  }
+  shape()
   refresh()
-  setInterval(refresh, 5000)
+  setInterval(refresh, 1500)
 })()

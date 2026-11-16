@@ -1932,16 +1932,20 @@
       }
     }
 
+    // 框选是**累积**的：扫过即选中，滚轮/自动滚动把行滚出视口后，之前框到的仍保留。
+    // 旧实现每次 pointermove 都用「当前矩形 vs 当前可见行」重算，滚轮一滚，滚出去的行
+    // 就不在矩形范围内，于是被丢掉——表现就是「滚轮后只记录当前框中的」。
+    let boxAccum = null
     const boxSelect = (rect, additive) => {
-      const picked = new Set(additive ? baseSel : [])
+      if (!boxAccum) boxAccum = new Set(additive ? baseSel : [])
       for (const node of rows()) {
         const b = node.getBoundingClientRect()
         // 相交即选中，符合"拖框扫过去就中"的直觉
         if (!(b.right < rect.left || b.left > rect.right || b.bottom < rect.top || b.top > rect.bottom)) {
-          picked.add(node.dataset.path)
+          boxAccum.add(node.dataset.path)
         }
       }
-      state.browseSel = picked
+      state.browseSel = new Set(boxAccum)
       paint()
     }
 
@@ -1949,6 +1953,7 @@
       mode = 'idle'
       dragPaths = []
       startRow = null
+      boxAccum = null
       rubber.classList.remove('on')
       rubber.style.cssText = ''
       delete document.body.dataset.boxing
@@ -2005,6 +2010,8 @@
         mode = 'box'
         document.body.dataset.boxing = 'true'
         rubber.classList.add('on')
+        // 框选累计集合在进入框选那一刻定基准：按住 Shift/Ctrl 时从已有选择累加。
+        boxAccum = new Set(event.shiftKey || event.ctrlKey || event.metaKey ? baseSel : [])
         // 确认是拖动后才捕获指针：保证拖到暂存区上方松手时 pointerup 仍回到列表，
         // 同时不影响"纯点击不捕获"，让行的 click 正常触发打开/预览。
         try { list.setPointerCapture(event.pointerId) } catch { /* 老 WebView 不支持就靠冒泡 */ }

@@ -16,7 +16,7 @@ const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
 // 从文件安装走宿主的第三方通道：id 必须 publisher.name，publisher 不能是官方保留的 fish，
 // 且 storage.directory 必须严格等于 .plugin.{publisher}.{name}
 // （校验见 Wakuwaku/src-tauri/src/storage.rs:76-82）。
-const PLUGIN = { key: 'filemgr', id: 'jassdingk.filemgr', name: '文件管理', directory: '.plugin.jassdingk.filemgr', capabilities: ['storage', 'events', 'windows', 'file-drop'] }
+const PLUGIN = { key: 'filemgr', id: 'jassdingk.filemgr', name: '文件管理', directory: '.plugin.jassdingk.filemgr', capabilities: ['storage', 'windows', 'file-drop', 'dock'] }
 
 // 插件目录里除这些之外的文件一律不进包
 const SKIP = name => name.includes('.test.') || name.endsWith('.cs') || name === 'stage.mjs' || name === 'README.md'
@@ -67,7 +67,7 @@ function stage(out) {
     schema: 1,
     id: PLUGIN.id,
     name: PLUGIN.name,
-    version: '1.1.0',
+    version: '1.2.0',
     hostApi: 1,
     platforms: ['windows-x86_64'],
     storage: { directory: PLUGIN.directory, dataSchema: 1 },
