@@ -2,7 +2,7 @@
 
 把 FISH Dock 变成随手可用的文件工作台：上半逛目录、下半看内容，左边还能把常用文件先「暂存」起来，随时拖进别的程序。
 
-插件 id `jassdingk.filemgr`，宿主 API 1，兼容 **FISH Dock v1.2.3 及更早的官方发行版**，不要求宿主做任何改动。
+插件 id `jassdingk.filemgr`，宿主 API 1，**要求 FISH Dock ≥ 2.3.4**（用到 `dock.rect / reserve / release`、`windows.update` 的 `duration / easing`、`hitTest` 等 2.2.2–2.3.4 的 hook 能力）。1.2.0 起子灵动岛改由插件自管外部窗口，需要宿主支持通用窗口 Hook。
 
 ## 功能
 
@@ -17,6 +17,9 @@
 ### 文件暂存（中转站）
 
 - 拖入文件或文件夹即加入暂存区，也可以右键 / 按钮添加。
+- **子灵动岛（1.2.0 起）**：主岛胶囊左侧常驻一个小球（显示暂存数量），点球展开成等宽胶囊的长条，点 `–`、按 `Esc`、点窗口外或悬停主岛都会收回小球。小球与长条是**同一个外部窗口**的两种形态（只改几何、带 200ms 补间），切换不闪断、拖入订阅不失效。
+- **主岛变化即收球**：主岛展开 / 收起 / 进设置 / 全屏避让时小球自动关闭消失，回到顶部紧凑胶囊再重新出现，不会留在原地。
+- 长条展开时向主岛登记占位（`dock.reserve`），主岛布局会让出空间，长条不压主岛内容。
 - **分组**：暂存区支持多个分组标签，点击切换，标签可折叠；删除分组只走标签右侧的 ×。分组之间完全隔离，切组不会串条目。
 - **拖出**：把暂存项直接拖到桌面、资源管理器、微信等外部程序。
 - 复制路径、复制为文件、多选批量、去重、清空，偏好持久化。
@@ -82,7 +85,7 @@ npm run build
 # 产物 dist/filemgr 就是一个完整的开发目录（含 plugin.json），交给 FISH Dock 开发加载即可
 ```
 
-两种产物都由 `tools/build.mjs` 一次生成。`sdk/` 里带的 `bridge.js` 与 `plugin.mjs` 是 FISH Dock v1.2.3 的原始副本，打包时会分别拷到包根目录的 `bridge.js` 和 `plugins/filemgr/sdk.mjs`——与官方 `tools/stage-development.mjs` 的做法一致。
+两种产物都由 `tools/build.mjs` 一次生成。`sdk/` 里带的 `bridge.js` 与 `plugin.mjs` 是 FISH Dock v2.3.4 的原始副本（逐字一致，未做本地修改），打包时会分别拷到包根目录的 `bridge.js` 和 `plugins/filemgr/sdk.mjs`——与官方 `tools/stage-development.mjs` 的做法一致。
 
 ## 说明
 
@@ -106,6 +109,8 @@ plugins/filemgr/
   page.html            页面结构（上下并列 + 左侧暂存）
   page.js              页面逻辑（浏览、预览、框选、暂存、目录选择器）
   page.css             布局与主题
+  panel.html           子灵动岛页面（球 / 长条同一窗口的两种形态）
+  panel.js             子灵动岛逻辑（形态切换、计数、chips、拖入高亮）
   filemgr.css          浏览器列表、行内按钮、高亮
   stash.css            暂存区与分组标签
   dock.css             与宿主共享的配色变量
@@ -113,13 +118,25 @@ plugins/filemgr/
   pick-files.ps1       原生多文件对话框
   clip.ps1             复制到剪贴板
 sdk/
-  browser/bridge.js    宿主注入页面的桥（官方 v1.2.3 原版）
-  node/plugin.mjs      后端 SDK（官方 v1.2.3 原版）
+  browser/bridge.js    宿主注入页面的桥（官方 v2.3.4 原版，未改动）
+  node/plugin.mjs      后端 SDK（官方 v2.3.4 原版，未改动）
 tools/
   build.mjs            打发行包 / 开发目录
 bin/
   fish-dock-filemgr.mjs  npm 全局命令：校验 + 安装 / 卸载插件
 ```
+
+## 更新记录
+
+### 1.2.0
+
+- 子灵动岛改用**插件自管的单个外部窗口**（`windows.open` + `windows.update` + `fileDrop.subscribe`），球与长条是同窗两形态，切换只改几何并带 200ms `ease-out-cubic` 补间，不再关窗重开。
+- 主岛状态变化（展开 / 收起 / 进设置 / 全屏避让）时小球自动关闭，回紧凑胶囊再重开；不随主岛长度变化实时移动。
+- 长条展开时用 `dock.reserve` 向主岛登记占位，主岛布局让出空间。
+- 命中测试 `hitTest` 只在长条展开时启用（球态不登记规则），避免宿主指针线程常驻 40ms 轮询。
+- 框选改为**累积**语义：滚轮把行滚出视口后，之前框到的仍保留。
+- 内置 SDK 更新到 FISH Dock v2.3.4 原版；`capabilities` 去掉已不需要的 `events`。
+- **破坏性**：不再兼容 2.3.4 以下宿主。
 
 ## 许可
 

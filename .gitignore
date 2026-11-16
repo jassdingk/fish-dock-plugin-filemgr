@@ -4,3 +4,5 @@ node_modules/
 _spawn-probe.log
 .npmrc
 *.tgz
+
+sdk/node/*.old-*.mjs
