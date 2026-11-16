@@ -3,10 +3,14 @@ const CATEGORIES = new Set(['credentials','roster','keys','config','exports','ba
 const DEFAULT_LIMIT = 1024 * 1024;
 export function createPlugin({ id, input = process.stdin, output = process.stdout,
   activate = async () => {}, deactivate = async () => {}, onEvent = async () => {}, commands = {},
-  onError = () => {}, maxLine = DEFAULT_LIMIT, requestTimeout = 12000 } = {}) {
+  onError = () => {}, maxLine = DEFAULT_LIMIT, requestTimeout: initialTimeout = 5000 } = {}) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id ?? '')) throw new Error('插件 ID 格式无效');
   if (!Number.isSafeInteger(maxLine) || maxLine < 128 || maxLine > DEFAULT_LIMIT) throw new Error('协议帧大小无效');
-  if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 30000) throw new Error('宿主调用时限无效');
+  if (!Number.isSafeInteger(initialTimeout) || initialTimeout < 1 || initialTimeout > 30000) throw new Error('宿主调用时限无效');
+  // 宿主调用时限：构造参数先定初值（默认 5000，与宿主热态下发值同一个数），握手时
+  // 若宿主下发 hostCallTimeoutMs（T04 冷/热分档）则按它覆盖——宿主热态给 5000、
+  // 冷态给 20000；旧宿主不带这个字段时就一直是构造时的初值。
+  let requestTimeout = initialTimeout;
   let buffer = Buffer.alloc(0), closed = false, active = false, hello = null;
   let sequence = 0, queued = 0, chain = Promise.resolve();
   const pending = new Map();
@@ -16,7 +20,7 @@ export function createPlugin({ id, input = process.stdin, output = process.stdou
     input.off('data', receive); input.off('end', ended); input.off('error', failed);
     output.off('error', failed);
     input.pause();
-    for (const { reject, timer } of pending.values()) { clearTimeout(timer); reject(new Error('插件会话已关闭')); }
+    for (const { reject, timer } of pending.values()) { if (timer) clearTimeout(timer); reject(new Error('插件会话已关闭')); }
     pending.clear(); buffer = Buffer.alloc(0);
   }
   function failed() { close(); onError(new Error('插件通信已中断')); }
@@ -26,25 +30,144 @@ export function createPlugin({ id, input = process.stdin, output = process.stdou
     if (bytes.length > maxLine || output.writableLength > maxLine * 4) { close(); throw new Error('插件通信队列或帧超过限制'); }
     output.write(bytes);
   }
-  function host(method, params) {
-    if (!hello?.capabilities.includes('storage')) return Promise.reject(new Error('插件未声明存储能力'));
+  function hostFor(capability, method, params, opts) {
+    if (!hello?.capabilities.includes(capability)) return Promise.reject(new Error(capability === 'storage' ? '插件未声明存储能力' : `插件未声明 ${capability} 能力`));
     if (closed || pending.size >= 64) return Promise.reject(new Error('宿主请求队列已满或已关闭'));
     const requestId = `sdk-${++sequence}`;
+    // noTimeout：宿主不设超时（dialogs.chooseFolder 等用户慢慢选）；会话关闭才 reject。
+    const noTimeout = opts?.noTimeout === true;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { pending.delete(requestId); reject(new Error('宿主调用超时')); }, requestTimeout);
+      // 无超时也用 timer 占位为 null；close() 清理时按 null 处理，pending 里统一结构。
+      const timer = noTimeout ? null : setTimeout(() => { pending.delete(requestId); reject(new Error('宿主调用超时')); }, requestTimeout);
       pending.set(requestId, { resolve, reject, timer });
       try { send({ id: requestId, method, params }); }
-      catch (error) { clearTimeout(timer); pending.delete(requestId); reject(error); }
+      catch (error) { if (timer) clearTimeout(timer); pending.delete(requestId); reject(error); }
     });
   }
+  function host(method, params) { return hostFor('storage', method, params); }
   function file(category, name) {
     if (!CATEGORIES.has(category) || typeof name !== 'string' || name.length > 128 || !/^[a-zA-Z0-9_.-]+$/.test(name)
       || name.includes('..') || name.toLowerCase() === 'readme.md' || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) throw new Error('存储类别或文件名无效');
     return { category, name };
   }
+  // 外部原生窗口与定向拖入（2.2.0）：与浏览器 SDK 同一套协议方法，宿主侧同一套
+  // 权限、代次与句柄检查。句柄是宿主给的字符串，插件不能自造，也不从中读身份。
+  const listeners = { windows: new Set(), fileDrop: new Set(), dock: new Set() };
+  function listen(kind, listener) {
+    if (typeof listener !== 'function') throw new TypeError('事件监听器必须是函数');
+    listeners[kind].add(listener);
+    return () => listeners[kind].delete(listener);
+  }
+  function handleOf(value, what) {
+    if (typeof value !== 'string' || !value) throw new Error(`${what}句柄无效`);
+    return value;
+  }
+  const windows = Object.freeze({
+    async open(options = {}) {
+      if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('窗口参数应为对象');
+      const result = await hostFor('windows', 'host.windows.open', options);
+      return result?.handle;
+    },
+    async update(handle, options = {}) {
+      return hostFor('windows', 'host.windows.update', { ...options, handle: handleOf(handle, '窗口') });
+    },
+    // 2.3.4（#88 H6）：单窗口多形态 / keepAlive 回原位，保留句柄与订阅。
+    async reopen(handle, options = {}) {
+      return hostFor('windows', 'host.windows.reopen', { ...options, handle: handleOf(handle, '窗口') });
+    },
+    async close(handle) {
+      const result = await hostFor('windows', 'host.windows.close', { handle: handleOf(handle, '窗口') });
+      return !!result?.closed;
+    },
+    async list() {
+      const result = await hostFor('windows', 'host.windows.list', {});
+      return result?.windows ?? [];
+    },
+    // 2.2.3（B3）：把本窗口里的文件拖回资源管理器（系统 OLE 拖放）。
+    // 立即返回；会话在宿主线程里跑到用户松手。
+    async beginDragOut(handle, paths) {
+      if (!Array.isArray(paths) || paths.length === 0) throw new Error('beginDragOut 需要文件路径数组');
+      const result = await hostFor('windows', 'host.windows.beginDragOut', { handle: handleOf(handle, '窗口'), paths: paths.map(String) });
+      return !!result?.started;
+    },
+    onEvent: listener => listen('windows', listener),
+  });
+  const fileDrop = Object.freeze({
+    // scope: 'dock'（主 Dock，独占）或 'window' + handle（本插件自己的窗口）。
+    async subscribe(options = {}) {
+      const result = await hostFor('file-drop', 'host.fileDrop.subscribe', options);
+      return result?.handle;
+    },
+    async unsubscribe(handle) {
+      const result = await hostFor('file-drop', 'host.fileDrop.unsubscribe', { handle: handleOf(handle, '拖入订阅') });
+      return !!result?.unsubscribed;
+    },
+    onEvent: listener => listen('fileDrop', listener),
+  });
+  // 2.2.2：主岛几何与状态（只读 + 事件订阅）。rect() 一次读实时快照；
+  // onEvent 订阅后宿主才开始按需上报（没有任何订阅者时页面不上报，零开销）。
+  const dock = Object.freeze({
+    // 返回 { window, capsule, state:{view,stowed,hidden,fullscreen}, scale }；
+    // capsule 在页面还没报过胶囊尺寸时为 null。
+    async rect() {
+      return hostFor('dock', 'host.dock.rect', {});
+    },
+    async onEvent(listener) {
+      if (typeof listener !== 'function') throw new TypeError('事件监听器必须是函数');
+      const off = listen('dock', listener);
+      await hostFor('dock', 'host.dock.subscribe', {});
+      return async () => {
+        off();
+        try { await hostFor('dock', 'host.dock.unsubscribe', {}); } catch { /* 会话已关：宿主那边已经清干净 */ }
+      };
+    },
+    // 2.2.3（D2）：在 Dock 设置面板里打开本插件的内部页。
+    // 这是「设置里的那一页」，不是再开一个外部窗口；pageId 必须是本插件
+    // pages[] 里登记过的 id。
+    async openPage(pageId) {
+      if (typeof pageId !== 'string' || !pageId) throw new Error('openPage 需要一个页面 ID');
+      return hostFor('dock', 'host.dock.openPage', { page: pageId });
+    },
+    // 2.3.4（#88 H10）：登记一块浮窗占位 {x,y,w,h}（页面逻辑像素），主岛据此避让。
+    async reserve(rect, handle) {
+      if (!rect || typeof rect !== 'object') throw new Error('reserve 需要一个 {x,y,w,h} 矩形');
+      return hostFor('dock', 'host.dock.reserve', { rect, handle });
+    },
+    // 释放占位：给 handle 按句柄释放，缺省释放本插件全部占位。
+    async release(handle) {
+      return hostFor('dock', 'host.dock.release', { handle });
+    },
+  });
   const context = Object.freeze({
     get dataDirectory() { return hello?.dataDirectory; },
     get storageIdentity() { return hello?.storage; },
+    // 2.2.0：外部原生窗口与定向拖入（与浏览器 SDK 同名同义）。
+    windows,
+    fileDrop,
+    // 2.2.2：主岛几何与状态。
+    dock,
+    // 2.3.4（DLG-4）：宿主原生选文件夹。参数在本地先校验（与宿主同一套规则），
+    // 未知字段/非法 title/非法 parent 一律本地拒绝、不发请求；无 SDK 超时，会话关闭才 reject。
+    // 页面侧（sdk/browser）不提供同名方法。
+    dialogs: Object.freeze({
+      async chooseFolder(options = {}) {
+        if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('选文件夹参数应为对象');
+        for (const key of Object.keys(options)) if (key !== 'title' && key !== 'parent') throw new Error('选文件夹参数含未知字段');
+        const parent = options.parent ?? 'main';
+        if (parent !== 'main') throw new Error("parent 只能是 'main'");
+        let params = { parent };
+        if (options.title !== undefined) {
+          if (typeof options.title !== 'string') throw new Error('title 必须是字符串');
+          const title = options.title.trim();
+          if (!title) throw new Error('title 不能为空');
+          if ([...title].length > 80) throw new Error('title 最长 80 字');
+          if (/[\u0000-\u001f\u007f-\u009f]/.test(title)) throw new Error('title 不能包含控制字符');
+          params = { title, parent };
+        }
+        // 能力在 hostFor 里再查一次：没声明 dialogs 会得到「插件未声明 dialogs 能力」。
+        return hostFor('dialogs', 'host.dialogs.chooseFolder', params, { noTimeout: true });
+      },
+    }),
     secrets: Object.freeze({
       async read(category, name) {
         const params=file(category,name);if(!['credentials','keys'].includes(category))throw new Error('加密凭据仅允许 credentials 或 keys 类别');
@@ -71,6 +194,12 @@ export function createPlugin({ id, input = process.stdin, output = process.stdou
     const error = (code, message) => send({ id: requestId, error: { code, message } });
     if (row.method === 'host.hello') {
       if (hello || row.params?.protocol !== 1 || row.params?.pluginId !== id || !Array.isArray(row.params.capabilities)) return error('BAD_HANDSHAKE','宿主握手身份或协议无效');
+      // 宿主下发的宿主调用时限（T04）：登录后 5 分钟内宿主会按冷态档给更宽的值；
+      // 旧宿主不带这个字段时回落构造时的 requestTimeout（默认 5000）。非法值
+      // （非整数/越界）按没下发处理，不让握手因此失败。
+      const offered = row.params.hostCallTimeoutMs;
+      const parsed = Number.isSafeInteger(offered) && offered > 0 && offered <= 30000 ? offered : 0;
+      if (parsed) requestTimeout = parsed;
       hello = Object.freeze({ ...row.params, capabilities: Object.freeze([...row.params.capabilities]) });
       return reply({ type:'plugin.hello', protocol:1, pluginId:id });
     }
@@ -83,9 +212,41 @@ export function createPlugin({ id, input = process.stdin, output = process.stdou
         if (!hello.capabilities.includes('events')) return error('CAPABILITY_REQUIRED','插件未声明事件能力');
         return reply(await onEvent(row.params ?? {},context));
       }
+      // 2.2.0：宿主单向通知本插件的窗口事件（ready/closed/anchorChanged/fileDrop）。
+      // 与 plugin.event 分开：窗口事件属于 windows / file-drop 能力，不要求 events。
+      if (row.method === 'plugin.windowEvent') {
+        const payload = row.params ?? {};
+        // 2.3.4（#88 B3）：dock 事件需要 dock 能力（此前被误判成 windows）；
+        // 且必须遍历 listeners.dock——旧代码从不遍历，后端 dock.onEvent 永远收不到。
+        const need = payload.event === 'fileDrop' ? 'file-drop' : payload.event === 'dock' ? 'dock' : 'windows';
+        if (!hello.capabilities.includes(need)) return error('CAPABILITY_REQUIRED',`插件未声明 ${need} 能力`);
+        for (const listener of [...listeners.windows]) {
+          try { await listener(payload); } catch { /* 监听器自己的错不该断会话 */ }
+        }
+        if (payload.event === 'fileDrop') {
+          for (const listener of [...listeners.fileDrop]) {
+            try { await listener(payload); } catch { /* 同上 */ }
+          }
+        }
+        if (payload.event === 'dock') {
+          for (const listener of [...listeners.dock]) {
+            try { await listener(payload); } catch { /* 同上 */ }
+          }
+        }
+        return reply({ handled:true });
+      }
       if (!Object.hasOwn(commands,row.method) || typeof commands[row.method] !== 'function') return error('UNKNOWN_METHOD','插件方法未注册');
       return reply(await commands[row.method](row.params ?? {},context));
-    } catch { return error('COMMAND_FAILED','插件操作失败，请检查配置及运行状态'); }
+    } catch (thrown) {
+      // 业务错误带码上行：插件自己抛出的 {code,message}（如 serviceError('PORT_IN_USE')）
+      // 原样交给宿主，页面才能按码查表显示专属文案；认不出来的异常仍折叠成 COMMAND_FAILED，
+      // 免得把可能夹带地址或凭据的原文透给宿主。
+      const code = typeof thrown?.code === 'string' ? thrown.code : '';
+      const message = typeof thrown?.message === 'string' ? thrown.message.trim() : '';
+      if (/^[A-Z][A-Z0-9_]{0,39}$/.test(code) && message && message.length <= 200 && !/[\u0000-\u001f\u007f]/.test(message))
+        return error(code, message);
+      return error('COMMAND_FAILED','插件操作失败，请检查配置及运行状态');
+    }
   }
   function accept(bytes) {
     let row;
@@ -94,11 +255,10 @@ export function createPlugin({ id, input = process.stdin, output = process.stdou
     if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('插件协议应为 JSON 对象');
     if (!Object.hasOwn(row,'method')) {
       const waiter = pending.get(row.id);
-      // 迟到/重复的宿主响应（原请求已因超时被清理）：静默丢弃，绝不让整个插件会话崩溃。
-      // 原实现此处 throw 会经 receive() → close()+onError() 杀死插件；任何一次超过
-      // requestTimeout 的存储调用，其迟到响应都会触发。调用方早已通过超时 reject 感知失败。
+      // 编号已经作废（宿主晚付的回执）就丢掉：这里以前直接 throw，receive 的 catch 会
+      // close() 整个会话——一次超时之后插件再也不应答，宿主只能重启进程。
       if (!waiter) return;
-      pending.delete(row.id); clearTimeout(waiter.timer);
+      pending.delete(row.id); if (waiter.timer) clearTimeout(waiter.timer);
       if (Object.hasOwn(row,'result') === Object.hasOwn(row,'error')) return waiter.reject(new Error('宿主响应结构无效'));
       if (row.error) waiter.reject(new Error('宿主存储操作失败')); else waiter.resolve(row.result);
       return;
