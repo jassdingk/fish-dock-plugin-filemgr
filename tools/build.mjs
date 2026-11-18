@@ -67,7 +67,7 @@ function stage(out) {
     schema: 1,
     id: PLUGIN.id,
     name: PLUGIN.name,
-    version: '1.2.0',
+    version: '1.2.1',
     hostApi: 1,
     platforms: ['windows-x86_64'],
     storage: { directory: PLUGIN.directory, dataSchema: 1 },

@@ -1,6 +1,6 @@
 {
   "name": "fish-dock-plugin-filemgr",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "FISH Dock 文件管理插件：目录浏览 + 文件预览（Markdown / 图片 / Office / 代码）+ 文件暂存中转站 + 子灵动岛（1.2.0 起要求 FISH Dock ≥ 2.3.4）。",
   "type": "module",
   "bin": {
