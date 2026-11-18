@@ -437,20 +437,36 @@ const OPEN_OPTS = { key: 'stash', page: 'stash', title: '文件暂存', ...BALL_
 
 function logWin(...args) { console.error('[filemgr]', ...args) }
 
-async function openWindow(ctx) {
-  const handle = await ctx.windows.open(OPEN_OPTS)
+async function openWindow(ctx, frameOverride) {
+  const handle = await ctx.windows.open(frameOverride ? { ...OPEN_OPTS, ...frameOverride } : OPEN_OPTS)
   winHandle = handle
   winMode = 'ball'
   // 拖入订阅跟着句柄走，**只订一次**：单窗多形态下句柄不变，切换形态不需要重订。
   try { await ctx.fileDrop.subscribe({ scope: 'window', handle }); logWin('window drop subscribe ok') }
   catch (e) { logWin('window drop subscribe err', e && e.message) }
-  // 初始位置校正：首次开球时主岛胶囊可能刚上报、宽度还没稳定，会先摆到错的 x。
-  // 1 秒后按当前胶囊再摆**一次**（一次性对齐，之后不跟随主岛长度变化）。
-  setTimeout(() => {
-    if (winHandle === handle && winMode === 'ball') {
-      ctx.windows.update(handle, { offsetX: BALL_FRAME.offsetX, offsetY: BALL_FRAME.offsetY, duration: 0 }).catch(() => {})
+  // 首次位置校正：唤醒/冷启时主岛胶囊可能还没上报，宿主的 anchorBase:'capsule' 会先
+  // 把球摆到默认位。这里轮询等胶囊真正可用后**立即**校正一次（≤2s），之后不再跟随主岛长度。
+  // 冷启动时主岛胶囊还在滑入（x 会从 ~747 变到 694），所以不能"拿到一次就停"：
+  // 在 1.6s 内每 100ms 复核，位置有变化就再摆一次，最终停在稳定位置。
+  let tries = 0
+  const correct = async () => {
+    if (winHandle !== handle || winMode !== 'ball') return
+    tries++
+    let snap = null
+    try { snap = await ctx.dock.rect() } catch (_) {}
+    const cap = snap && snap.capsule
+    if (cap) {
+      const sfs = snap && Number(snap.scale) > 0 ? Number(snap.scale) : 1
+      const pos = { x: Math.round((cap.x - 36 - 7) / sfs), y: Math.round((cap.y + Math.round((cap.height - 36) / 2)) / sfs) }
+      const changed = !lastBallPos || lastBallPos.x !== pos.x || lastBallPos.y !== pos.y
+      lastBallPos = pos                   // 记住，供下次唤醒直接用
+      if (changed || tries === 1) {
+        ctx.windows.update(handle, { anchor: 'screen', align: 'left-top', offsetX: pos.x, offsetY: pos.y, duration: 0 }).catch(() => {})
+      }
     }
-  }, 1000)
+    if (tries * 100 < 1600) setTimeout(correct, 100)
+  }
+  setTimeout(correct, 100)
   return handle
 }
 // 球 ↔ 条：只改几何，不关窗。duration 让宿主把尺寸与位置一起补间（#88 H2），
@@ -488,29 +504,59 @@ async function syncReserve(ctx) {
   } catch (e) { logWin('reserve err', e && e.message) }
 }
 
-// 主岛状态轮询（纯 hook：只读 ctx.dock.rect() 的快照，不改宿主、不依赖场景外的事件广播）。
-// 目的：主灵动岛一有变化就把子岛收起——收起/隐藏/全屏避让时**关掉小球窗口**（不再留原地），
-// 唤回时重新开球；主岛展开/设置/ask 时把长条收成小球。这就是旧产物 followBar=false 的口径。
-// ⚠️ close/open 会销毁并**重建** WebView2（几百 ms），所以加「状态稳定」防抖：
-// 同一状态连续 STABLE_TICKS 次（≈600ms）才动作，避免悬停展开/收起反复时反复重建造成卡顿。
+// 主岛状态：**事件驱动为主 + 轮询兜底**。
+// 宿主 plugin_dock::notify_changed 在 view/stowed/hidden/fullscreen 真正变化时会立刻广播
+// type:'state' 事件（且已去重），所以唤醒不必等轮询；轮询只做丢事件时的纠正（间隔放宽到 1s）。
+// 目的不变：主岛一变化就收球——收起/隐藏/全屏避让关掉小球（不留原地），回紧凑则重开。
+// ⚠️ close/open 会销毁并重建 WebView2（数百 ms），所以**事件路径立即动作**（宿主已去重），
+// 只有轮询兜底路径才用「连续 STABLE_TICKS 次稳定」防抖，避免兜底逻辑自己抖出反复重建。
 const STABLE_TICKS = 3
 let lastAwayKey = null
 let stableCount = 0
-let syncBusy = false      // 防重入：dock.rect/open/close 都比 250ms tick 慢，重叠会重复开窗
+let syncBusy = false      // 防重入：dock.rect/open/close 都比 tick 慢，重叠会重复开窗
+let pendingState = null   // 忙的时候来事件 → 记最后一次，忙完立刻补应用
+let lastBallPos = null   // 上次胶囊可用时算出的球左上角（逻辑像素），唤醒时胶囊为 null 就用它走绝对定位
+let hereTimer = null      // 「回到紧凑」的去抖定时器：stow 动画期间会短暂报 compact，别一看到就建窗
+const HERE_DEBOUNCE_MS = 80
 let waitCapsuleAt = 0     // 等主岛胶囊上报的起点（超时后不再等）
-const CAPSULE_WAIT_MS = 2500
-async function syncDockState(ctx) {
-  if (syncBusy) return
+const CAPSULE_WAIT_MS = 1200
+const STATE_POLL_MS = 1000
+
+function awayOf(st) {
+  return !!(st && (st.hidden || st.stowed || st.fullscreen || (st.view && st.view !== 'compact')))
+}
+
+async function syncDockState(ctx, opts) {
+  opts = opts || {}
+  if (syncBusy) { if (opts.state) pendingState = opts.state; return }
   syncBusy = true
   try {
-    const snap = await ctx.dock.rect()
-    const st = snap && snap.state
+    let snap = null
+    let st = opts.state || null
+    if (!st) {
+      snap = await ctx.dock.rect()
+      st = snap && snap.state
+    }
     if (!st) return
-    // 主岛只要不是「compact 且可见」，就把小球收起（close）——收起/唤醒/展开/设置/全屏避让都算。
-    const away = !!(st.hidden || st.stowed || st.fullscreen || (st.view && st.view !== 'compact'))
+    if (snap && snap.capsule) {
+      const sfs = Number(snap.scale) > 0 ? Number(snap.scale) : 1
+      const c = snap.capsule
+      lastBallPos = {
+        x: Math.round((c.x - 36 - 7) / sfs),
+        y: Math.round((c.y + Math.round((c.height - 36) / 2)) / sfs),
+      }
+    }
+    const away = awayOf(st)
     const key = away ? 'away' : 'here'
-    if (key !== lastAwayKey) { lastAwayKey = key; stableCount = 0; return }   // 状态刚变，先等稳定
-    if (stableCount < STABLE_TICKS) { stableCount++; return }                 // 未稳定，不动手
+    if (opts.immediate) {
+      // 事件路径：宿主已在变化时去重，直接按当前状态执行。
+      lastAwayKey = key; stableCount = STABLE_TICKS
+    } else {
+      // 轮询兜底路径：与上次相同且已稳定就什么都不做（绝大多数 tick 走这里，零开销）。
+      if (key === lastAwayKey && stableCount >= STABLE_TICKS) return
+      if (key !== lastAwayKey) { lastAwayKey = key; stableCount = 0; return }
+      if (stableCount < STABLE_TICKS) { stableCount++; return }
+    }
     if (away) {
       if (winHandle) {
         try { await ctx.windows.close(winHandle) } catch (_) {}
@@ -520,22 +566,28 @@ async function syncDockState(ctx) {
       return
     }
     if (!winHandle) {
-      // 优先等主岛胶囊上报后再开球（首次就贴胶囊左缘）；但主岛可能迟迟没上报 closed_rect
-      // （页面 ready 前 pet.stow 还没发），所以最多等 CAPSULE_WAIT_MS，超时就先开，
-      // 位置交给 openWindow 里 1s 后的 update 校正——绝不无限等待，否则球永远不出现。
-      if (!snap.capsule) {
+      if (!snap) { try { snap = await ctx.dock.rect() } catch (_) {} }
+      const capsule = snap && snap.capsule
+      // 胶囊可用 → 声明式最准；胶囊为 null（stow 恢复后宿主暂不上报）→ 用上次算好的
+      // 绝对坐标 anchor:'screen' 一次摆准，绝不摆在主岛窗口左缘。
+      let frame = null
+      if (lastBallPos) {
+        frame = { anchor: 'screen', align: 'left-top', offsetX: lastBallPos.x, offsetY: lastBallPos.y }
+      } else if (!capsule) {
         if (!waitCapsuleAt) waitCapsuleAt = Date.now()
         if (Date.now() - waitCapsuleAt < CAPSULE_WAIT_MS) return
-      } else {
-        waitCapsuleAt = 0
-      }
+      } else { waitCapsuleAt = 0 }
+      const t0 = Date.now()
       try {
-        await openWindow(ctx)
-        logWin('dock-state: opened ball' + (snap.capsule ? '' : ' (fallback: no capsule yet)'))
+        await openWindow(ctx, frame)
+        logWin('dock-state: opened ball ' + (Date.now() - t0) + 'ms' + (capsule ? '' : frame ? ' (cached@' + lastBallPos.x + ',' + lastBallPos.y + ')' : ' (no capsule yet)'))
       } catch (_) {}
       return
     }
-  } catch (e) { logWin('dock-state err', e && e.message) } finally { syncBusy = false }
+  } catch (e) { logWin('dock-state err', e && e.message) } finally {
+    syncBusy = false
+    if (pendingState) { const st2 = pendingState; pendingState = null; syncDockState(ctx, { state: st2, immediate: true }) }
+  }
 }
 
 createPlugin({
@@ -558,7 +610,22 @@ createPlugin({
       if (ctx.dock && typeof ctx.dock.onEvent === 'function') {
         await ctx.dock.onEvent(ev => {
           if (!ev) return
-          if (ev.type === 'pointer' && ev.action === 'enter') {
+          if (ev.type === 'state') {
+            // 2.3.6 宿主 state 事件：view/stowed/overFull/hidden 真正变化时立刻推送（已去重）。
+            const st = { view: ev.view, stowed: !!ev.stowed, fullscreen: !!ev.overFull, hidden: !!ev.hidden }
+            if (awayOf(st)) {
+              // 收球方向**立即**执行：主岛一变化就不许留球。
+              if (hereTimer) { clearTimeout(hereTimer); hereTimer = null }
+              syncDockState(ctx, { state: st, immediate: true })
+            } else {
+              // 开球方向去抖 120ms：stow 动画途中会短暂报 compact，若立刻建窗就会「开了又关」闪一下。
+              if (hereTimer) clearTimeout(hereTimer)
+              hereTimer = setTimeout(() => {
+                hereTimer = null
+                syncDockState(ctx, { state: st, immediate: true })
+              }, HERE_DEBOUNCE_MS)
+            }
+          } else if (ev.type === 'pointer' && ev.action === 'enter') {
             // 悬停主岛收球。点小球展开时鼠标会擦过胶囊边界触发一次 enter，用时间窗压掉竞态。
             if (winMode === 'bar' && Date.now() - lastModeAt > 1200) morph(ctx, 'ball')
           } else if (ev.type === 'outside') {
@@ -586,7 +653,7 @@ createPlugin({
 
     // 常驻小球：交给下面的 dock 状态轮询统一开（等胶囊上报后再开，首次位置就正确）。
     // 每 250ms 读一次主岛快照：收起→关球、唤回→开球、展开→收球（纯 hook dock.rect）
-    dockStateTimer = setInterval(() => { syncDockState(ctx) }, 250)
+    dockStateTimer = setInterval(() => { syncDockState(ctx) }, STATE_POLL_MS)
   },
   deactivate: async () => {
     // 宿主停用/退出插件时清理后台资源，避免遗留 HTTP 拖出服务或选择对话框的脏状态。
@@ -599,6 +666,7 @@ createPlugin({
     winHandle = null
     winMode = 'ball'
     if (dockStateTimer) { clearInterval(dockStateTimer); dockStateTimer = 0 }
+    if (hereTimer) { clearTimeout(hereTimer); hereTimer = null }
     await saveConfig()
   },
   // 协议层出错只记日志，绝不设置退出码：exitCode 非 0 会让宿主直接判定插件异常退出，
